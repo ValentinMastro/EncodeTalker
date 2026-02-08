@@ -22,9 +22,14 @@ impl DependencyDetector {
         }
 
         // Vérifier que le binaire est exécutable en testant --version
+        // Note: certains binaires (comme ffmpeg) retournent un exit code non-zero
+        // même pour --version, donc on vérifie aussi la sortie
         match Command::new(&bin_path).arg("--version").output() {
             Ok(output) => {
-                if output.status.success() {
+                // Vérifier si la commande a produit une sortie (stdout ou stderr)
+                let has_output = !output.stdout.is_empty() || !output.stderr.is_empty();
+
+                if output.status.success() || has_output {
                     info!("{} détecté et fonctionnel", name);
                     true
                 } else {

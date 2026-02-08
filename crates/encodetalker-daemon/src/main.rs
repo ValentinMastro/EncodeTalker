@@ -32,7 +32,21 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Répertoire de données: {:?}", paths.data_dir);
 
-    // Vérifier et compiler les dépendances si nécessaire
+    // Charger la configuration AVANT de compiler les dépendances
+    let config = DaemonConfig::load_or_default(&paths.config_file);
+    info!("Configuration chargée");
+
+    // Créer le socket Unix immédiatement pour que le TUI puisse se connecter
+    // Supprimer l'ancien socket s'il existe
+    if paths.socket_path.exists() {
+        std::fs::remove_file(&paths.socket_path)?;
+    }
+
+    // Bind le socket maintenant (mais on démarrera le serveur plus tard)
+    let listener = tokio::net::UnixListener::bind(&paths.socket_path)?;
+    info!("Socket créé sur {:?}", paths.socket_path);
+
+    // Maintenant compiler les dépendances (le socket existe déjà, donc le TUI peut tenter de se connecter)
     info!("Vérification des dépendances...");
     let dep_manager = DependencyManager::new(paths.clone());
     let status = dep_manager.check_status();
@@ -40,20 +54,19 @@ async fn main() -> anyhow::Result<()> {
     if !status.all_present() {
         info!("Dépendances manquantes: {:?}", status.missing());
         info!("Compilation des dépendances (cela peut prendre 30-60 minutes)...");
+        info!("Le serveur IPC sera disponible une fois la compilation terminée");
 
         if let Err(e) = dep_manager.ensure_all_deps().await {
             error!("Échec de la compilation des dépendances: {}", e);
             error!("Veuillez installer les dépendances système requises:");
             error!("  sudo pacman -S base-devel cmake git nasm ruby");
+            // Nettoyer le socket avant de quitter
+            let _ = std::fs::remove_file(&paths.socket_path);
             return Err(anyhow::anyhow!("{}", e));
         }
     }
 
     info!("Toutes les dépendances sont présentes");
-
-    // Charger la configuration
-    let config = DaemonConfig::load_or_default(&paths.config_file);
-    info!("Configuration chargée");
 
     // Créer le pipeline d'encodage
     let pipeline = EncodingPipeline::new(
@@ -104,9 +117,9 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Lancer le serveur IPC
+    // Lancer le serveur IPC avec le listener déjà créé
     let ipc_task = tokio::spawn(async move {
-        if let Err(e) = ipc_server.run(event_rx).await {
+        if let Err(e) = ipc_server.run_with_listener(Some(listener), event_rx).await {
             error!("Erreur du serveur IPC: {}", e);
         }
     });

@@ -28,15 +28,29 @@ impl IpcServer {
         }
     }
 
-    /// Démarrer le serveur IPC
-    pub async fn run(&self, mut event_rx: mpsc::UnboundedReceiver<QueueEvent>) -> Result<()> {
-        // Supprimer l'ancien socket s'il existe
-        if self.socket_path.exists() {
-            std::fs::remove_file(&self.socket_path)?;
-        }
+    /// Démarrer le serveur IPC (wrapper pour compatibilité)
+    pub async fn run(&self, event_rx: mpsc::UnboundedReceiver<QueueEvent>) -> Result<()> {
+        self.run_with_listener(None, event_rx).await
+    }
 
-        let listener = UnixListener::bind(&self.socket_path)?;
-        info!("Serveur IPC en écoute sur {:?}", self.socket_path);
+    /// Démarrer le serveur IPC avec un listener optionnel déjà créé
+    pub async fn run_with_listener(
+        &self,
+        listener: Option<UnixListener>,
+        mut event_rx: mpsc::UnboundedReceiver<QueueEvent>
+    ) -> Result<()> {
+        let listener = if let Some(l) = listener {
+            info!("Utilisation du listener existant sur {:?}", self.socket_path);
+            l
+        } else {
+            // Supprimer l'ancien socket s'il existe
+            if self.socket_path.exists() {
+                std::fs::remove_file(&self.socket_path)?;
+            }
+            let l = UnixListener::bind(&self.socket_path)?;
+            info!("Serveur IPC en écoute sur {:?}", self.socket_path);
+            l
+        };
 
         // Channel pour broadcaster les événements à tous les clients
         let (broadcast_tx, _) = tokio::sync::broadcast::channel::<Event>(100);

@@ -275,16 +275,27 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
 
     cmd.spawn().context("Échec du démarrage du daemon")?;
 
-    // Attendre que le socket soit créé (max 10 secondes)
-    for _ in 0..100 {
+    info!("Attente du démarrage du daemon...");
+    info!("Note: La première fois, le daemon compile les dépendances (ffmpeg, SVT-AV1, etc.)");
+    info!("      Cela peut prendre 30-60 minutes. Veuillez patienter...");
+
+    // Attendre que le socket soit créé (max 3 minutes)
+    // La première fois, le daemon compile les dépendances avant de créer le socket
+    for i in 0..1800 {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         if socket_path.exists() {
             // Attendre un peu plus pour que le daemon soit prêt
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            info!("Daemon démarré");
+            info!("Daemon démarré et prêt");
             return Ok(());
+        }
+
+        // Afficher un message toutes les 10 secondes
+        if i % 100 == 0 && i > 0 {
+            let seconds = i / 10;
+            info!("Attente du daemon... ({} secondes écoulées)", seconds);
         }
     }
 
-    anyhow::bail!("Timeout en attente du démarrage du daemon");
+    anyhow::bail!("Timeout en attente du démarrage du daemon (3 minutes). Vérifiez les logs dans ~/.local/share/encodetalker/daemon.log");
 }
