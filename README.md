@@ -46,12 +46,21 @@ EncodeTalker/
 - Auto-save toutes les 10 secondes
 - Shutdown graceful
 
-### ⏳ Phase 4 : TUI (TODO)
-- Interface ratatui
-- Navigation filesystem
-- Vues : FileBrowser, QueueView, ActiveView, HistoryView
-- Client IPC
-- Dialogues de configuration
+### ✅ Phase 4 : TUI (Complète)
+- Interface ratatui avec 4 vues principales
+- **FileBrowser** : Navigation filesystem avec filtrage des vidéos
+- **QueueView** : Liste des jobs en attente
+- **ActiveView** : Jobs en cours avec stats temps réel et barres de progression
+- **HistoryView** : Historique avec retry des jobs failed
+- Client IPC avec reconnexion automatique
+- Démarrage automatique du daemon
+- Dialogues interactifs :
+  * Configuration d'encodage (encoder, audio, CRF, preset)
+  * Confirmation (annulation, clear history)
+  * Affichage d'erreurs
+- Gestion clavier complète (vim-like + flèches)
+- Rafraîchissement automatique toutes les 500ms
+- Événements temps réel du daemon (progression, completion)
 
 ### ⏳ Phase 5 : Polish (TODO)
 - Tests d'intégration
@@ -70,7 +79,29 @@ cargo build --release -p encodetalker-daemon
 
 ## Utilisation
 
-### Démarrage du daemon
+### Lancement du TUI (recommandé)
+
+```bash
+./target/release/encodetalker-tui
+```
+
+Le TUI va :
+1. Vérifier si le daemon est en cours d'exécution
+2. Démarrer automatiquement le daemon si nécessaire
+3. Se connecter au daemon via IPC
+4. Afficher l'interface interactive
+
+**Navigation :**
+- `Tab` : Changer de vue (Files → Queue → Active → History)
+- `↑↓` ou `k`/`j` : Naviguer dans les listes
+- `Enter` : Ouvrir un répertoire ou configurer un fichier vidéo
+- `a` : Ajouter une vidéo à la queue (dans Files)
+- `c` : Annuler un job (dans Queue/Active)
+- `r` : Rafraîchir ou Retry un job failed (dans History)
+- `C` : Clear l'historique (dans History)
+- `q` : Quitter
+
+### Démarrage manuel du daemon (optionnel)
 
 ```bash
 ./target/release/encodetalker-daemon
@@ -175,9 +206,53 @@ Communication via Unix socket avec messages bincode sérialisés :
 - Démarrage automatique quand des slots se libèrent
 - Notified pattern avec `tokio::sync::Notify` pour éviter les boucles actives
 
+## Workflow typique
+
+1. **Lancer le TUI** : `./target/release/encodetalker-tui`
+2. **Naviguer vers vos vidéos** : Utiliser `↑↓` et `Enter` dans l'onglet Files
+3. **Sélectionner une vidéo** : Appuyer sur `a` ou `Enter` sur un fichier vidéo
+4. **Configurer l'encodage** :
+   - Choisir l'encodeur (SVT-AV1 ou libaom)
+   - Configurer l'audio (Opus ou Copy)
+   - Ajuster CRF (qualité) et Preset (vitesse)
+   - Valider avec `Enter`
+5. **Surveiller la progression** : Basculer vers l'onglet Active (Tab)
+6. **Vérifier les résultats** : Consulter l'historique dans l'onglet History
+
+Le TUI se reconnecte automatiquement au daemon, vous pouvez le fermer et revenir plus tard !
+
+## Raccourcis clavier
+
+### Globaux
+- `Tab` : Vue suivante
+- `Shift+Tab` : Vue précédente
+- `q` : Quitter
+
+### File Browser
+- `↑↓` / `k`/`j` : Naviguer
+- `Enter` : Ouvrir répertoire ou configurer vidéo
+- `a` : Ajouter à la queue
+- `r` : Rafraîchir
+
+### Queue & Active
+- `↑↓` / `k`/`j` : Naviguer
+- `c` : Annuler le job sélectionné
+- `r` : Rafraîchir
+
+### History
+- `↑↓` / `k`/`j` : Naviguer
+- `r` : Retry un job failed
+- `Shift+C` : Clear tout l'historique
+
+### Dialogues
+- `↑↓` : Naviguer entre les champs
+- `←→` : Modifier la valeur
+- `Enter` : Valider
+- `ESC` : Annuler
+
 ## Limitations actuelles
 
-- Pas de TUI (Phase 4 non implémentée)
+- Sélection manuelle des streams audio/sous-titres non implémentée (tous inclus par défaut)
 - Pas d'API pour interagir avec le daemon (sauf via le socket Unix)
 - Un seul job simultané par défaut (configurable)
 - Pipeline audio simplifié (Opus ou copy uniquement)
