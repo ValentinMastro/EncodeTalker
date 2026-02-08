@@ -1,0 +1,23 @@
+[daemon]
+max_concurrent_jobs = 1
+socket_path = "~/.local/share/encodetalker/daemon.sock"
+log_level = "info"
+
+[encoding]
+default_encoder = "svt-av1"
+default_audio_mode = "opus"
+default_audio_bitrate = 128
+output_suffix = ".av1"
+
+[encoder.svt-av1]
+preset = 6
+crf = 30
+params = ["--keyint", "240", "--tune", "3"]
+
+[encoder.aom]
+cpu-used = 4
+crf = 30
+
+[ui]
+file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"]
+refresh_interval_ms = 500
