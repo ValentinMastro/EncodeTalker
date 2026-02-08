@@ -1,12 +1,12 @@
+use super::{PersistedState, Persistence};
+use crate::encoder::EncodingPipeline;
+use anyhow::Result;
+use encodetalker_common::{EncodingJob, EncodingStats, JobStatus};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tracing::{error, info, warn};
 use uuid::Uuid;
-use anyhow::Result;
-use tracing::{info, error, warn};
-use encodetalker_common::{EncodingJob, JobStatus, EncodingStats};
-use super::{Persistence, PersistedState};
-use crate::encoder::EncodingPipeline;
 
 /// Événement interne de la queue
 #[derive(Debug, Clone)]
@@ -21,7 +21,6 @@ pub enum QueueEvent {
 
 /// Contrôle d'un job en cours
 struct ActiveJobControl {
-    job_id: Uuid,
     cancel_tx: mpsc::UnboundedSender<()>,
 }
 
@@ -154,7 +153,10 @@ impl QueueManager {
     pub async fn retry_job(&self, job_id: Uuid) -> Result<()> {
         let mut history = self.history.write().await;
 
-        if let Some(pos) = history.iter().position(|j| j.id == job_id && j.status == JobStatus::Failed) {
+        if let Some(pos) = history
+            .iter()
+            .position(|j| j.id == job_id && j.status == JobStatus::Failed)
+        {
             let mut job = history.remove(pos);
             job.status = JobStatus::Queued;
             job.error_message = None;
@@ -259,10 +261,10 @@ impl QueueManager {
         let (stats_tx, mut stats_rx) = mpsc::unbounded_channel::<EncodingStats>();
 
         // Stocker le contrôle
-        self.active_controls.lock().await.insert(
-            job_id,
-            ActiveJobControl { job_id, cancel_tx },
-        );
+        self.active_controls
+            .lock()
+            .await
+            .insert(job_id, ActiveJobControl { cancel_tx });
 
         // Clone des ressources pour la tâche
         let pipeline = self.pipeline.clone();

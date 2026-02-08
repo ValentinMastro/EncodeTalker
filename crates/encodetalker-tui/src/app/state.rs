@@ -1,5 +1,5 @@
-use std::path::PathBuf;
-use encodetalker_common::{EncodingJob, EncodingConfig};
+use encodetalker_common::{EncodingConfig, EncodingJob};
+use std::path::{Path, PathBuf};
 
 /// Vue active de l'application
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,12 +176,10 @@ impl FileBrowserState {
                 .collect();
 
             // Trier : dossiers d'abord, puis fichiers
-            items.sort_by(|a, b| {
-                match (a.is_dir, b.is_dir) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.name.cmp(&b.name),
-                }
+            items.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.name.cmp(&b.name),
             });
 
             self.entries.extend(items);
@@ -212,12 +210,16 @@ pub struct DirEntry {
 }
 
 /// Vérifier si un fichier est une vidéo
-fn is_video_file(path: &PathBuf) -> bool {
-    const VIDEO_EXTENSIONS: &[&str] = &[".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v"];
+fn is_video_file(path: &Path) -> bool {
+    const VIDEO_EXTENSIONS: &[&str] = &[
+        ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v",
+    ];
 
     if let Some(ext) = path.extension() {
         let ext_str = ext.to_string_lossy().to_lowercase();
-        VIDEO_EXTENSIONS.iter().any(|&e| e.trim_start_matches('.') == ext_str)
+        VIDEO_EXTENSIONS
+            .iter()
+            .any(|&e| e.trim_start_matches('.') == ext_str)
     } else {
         false
     }

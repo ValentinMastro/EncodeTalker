@@ -1,15 +1,13 @@
+pub mod builder;
 pub mod detector;
 pub mod downloader;
-pub mod builder;
 pub mod manager;
 
 // N'exporter que les types publics nécessaires, pas Result pour éviter conflits
-pub use manager::DependencyManager;
+pub use builder::{AomBuilder, DependencyBuilder, FFmpegBuilder, MkvtoolnixBuilder, SvtAv1Builder};
 pub use detector::{DependencyDetector, DependencyStatus};
 pub use downloader::Downloader;
-pub use builder::{
-    DependencyBuilder, FFmpegBuilder, SvtAv1Builder, AomBuilder, MkvtoolnixBuilder,
-};
+pub use manager::DependencyManager;
 
 use thiserror::Error;
 

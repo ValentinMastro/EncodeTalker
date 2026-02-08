@@ -1,8 +1,8 @@
+use super::{EncodingStats, JobStatus};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use super::{JobStatus, EncodingStats};
 
 /// Configuration d'encodage pour un job
 #[derive(Debug, Clone, Serialize, Deserialize)]

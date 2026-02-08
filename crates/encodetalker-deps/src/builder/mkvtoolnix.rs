@@ -1,8 +1,6 @@
-use std::path::PathBuf;
-use tracing::{info, error};
-use crate::{Result, DepsError, Downloader, DependencyBuilder};
-
-const MKVTOOLNIX_VERSION: &str = "82.0";
+use crate::{DependencyBuilder, DepsError, Downloader, Result};
+use std::path::{Path, PathBuf};
+use tracing::{error, info};
 const MKVTOOLNIX_URL: &str = "https://mkvtoolnix.download/sources/mkvtoolnix-82.0.tar.xz";
 
 pub struct MkvtoolnixBuilder {
@@ -30,7 +28,8 @@ impl DependencyBuilder for MkvtoolnixBuilder {
     }
 
     async fn download(&self) -> Result<PathBuf> {
-        let archive = self.downloader
+        let archive = self
+            .downloader
             .download_tarball(MKVTOOLNIX_URL, "mkvtoolnix-82.0.tar.xz")
             .await?;
 
@@ -45,7 +44,7 @@ impl DependencyBuilder for MkvtoolnixBuilder {
         // Configure using rake (mkvtoolnix uses rake instead of autotools)
         let configure_output = tokio::process::Command::new("./configure")
             .current_dir(&source_dir)
-            .args(&[
+            .args([
                 &format!("--prefix={}", install_prefix.display()),
                 "--disable-gui",
                 "--disable-qt",
@@ -94,7 +93,7 @@ impl DependencyBuilder for MkvtoolnixBuilder {
         Ok(())
     }
 
-    fn verify(&self, bin_dir: &PathBuf) -> bool {
+    fn verify(&self, bin_dir: &Path) -> bool {
         bin_dir.join("mkvmerge").exists()
     }
 }

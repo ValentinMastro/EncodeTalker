@@ -1,9 +1,9 @@
+use crate::{DepsError, Result};
+use reqwest;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use reqwest;
 use tracing::info;
-use crate::{Result, DepsError};
 
 /// Téléchargeur de sources
 pub struct Downloader {
@@ -55,7 +55,7 @@ impl Downloader {
         info!("Clonage de {} depuis {}", dir_name, url);
 
         let output = tokio::process::Command::new("git")
-            .args(&["clone", url, output_path.to_str().unwrap()])
+            .args(["clone", url, output_path.to_str().unwrap()])
             .output()
             .await?;
 
@@ -72,7 +72,11 @@ impl Downloader {
     }
 
     /// Extraire une archive tar.xz
-    pub async fn extract_tarball(&self, archive_path: &Path, extract_name: &str) -> Result<PathBuf> {
+    pub async fn extract_tarball(
+        &self,
+        archive_path: &Path,
+        extract_name: &str,
+    ) -> Result<PathBuf> {
         let extract_path = self.src_dir.join(extract_name);
 
         if extract_path.exists() {
@@ -83,7 +87,7 @@ impl Downloader {
         info!("Extraction de {:?}", archive_path);
 
         let output = tokio::process::Command::new("tar")
-            .args(&[
+            .args([
                 "xf",
                 archive_path.to_str().unwrap(),
                 "-C",

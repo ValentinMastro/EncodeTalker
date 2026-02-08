@@ -1,15 +1,15 @@
-pub mod ffmpeg;
-pub mod svt_av1;
 pub mod aom;
+pub mod ffmpeg;
 pub mod mkvtoolnix;
+pub mod svt_av1;
 
-pub use ffmpeg::*;
-pub use svt_av1::*;
 pub use aom::*;
+pub use ffmpeg::*;
 pub use mkvtoolnix::*;
+pub use svt_av1::*;
 
-use std::path::PathBuf;
 use crate::Result;
+use std::path::{Path, PathBuf};
 
 /// Trait pour un builder de dépendance
 #[async_trait::async_trait]
@@ -24,5 +24,5 @@ pub trait DependencyBuilder: Send + Sync {
     async fn build(&self, source_dir: PathBuf, install_prefix: PathBuf) -> Result<()>;
 
     /// Vérifier que la compilation a réussi
-    fn verify(&self, bin_dir: &PathBuf) -> bool;
+    fn verify(&self, bin_dir: &Path) -> bool;
 }

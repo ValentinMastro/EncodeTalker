@@ -1,8 +1,5 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
 use crate::app::AppState;
+use ratatui::{prelude::*, widgets::*};
 
 /// Rendre la vue de la queue
 pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -12,18 +9,24 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
         .border_style(Style::default().fg(Color::Yellow));
 
     if state.queue_jobs.is_empty() {
-        let text = Paragraph::new("Aucun job en queue\n\nUtilisez l'onglet Files pour ajouter des vidéos à encoder.")
-            .block(block)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
+        let text = Paragraph::new(
+            "Aucun job en queue\n\nUtilisez l'onglet Files pour ajouter des vidéos à encoder.",
+        )
+        .block(block)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(text, area);
         return;
     }
 
     // Créer les items de la liste
-    let items: Vec<ListItem> = state.queue_jobs.iter()
+    let items: Vec<ListItem> = state
+        .queue_jobs
+        .iter()
         .map(|job| {
-            let filename = job.input_path.file_name()
+            let filename = job
+                .input_path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
 
@@ -35,18 +38,21 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
             let audio = match &job.config.audio_mode {
                 encodetalker_common::AudioMode::Opus { bitrate } => format!("Opus {}k", bitrate),
                 encodetalker_common::AudioMode::Copy => "Copy".to_string(),
-                encodetalker_common::AudioMode::Custom { codec, bitrate } => format!("{} {}k", codec, bitrate),
+                encodetalker_common::AudioMode::Custom { codec, bitrate } => {
+                    format!("{} {}k", codec, bitrate)
+                }
             };
 
             let text = format!(
                 "{}\n  Encoder: {} | Audio: {} | CRF: {} | Preset: {}",
-                filename, encoder, audio,
+                filename,
+                encoder,
+                audio,
                 job.config.encoder_params.crf,
                 job.config.encoder_params.preset
             );
 
-            ListItem::new(text)
-                .style(Style::default().fg(Color::White))
+            ListItem::new(text).style(Style::default().fg(Color::White))
         })
         .collect();
 
@@ -55,7 +61,7 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
         .highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
 

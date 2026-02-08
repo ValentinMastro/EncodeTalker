@@ -1,18 +1,17 @@
+use crate::queue::{QueueEvent, QueueManager};
+use anyhow::Result;
+use encodetalker_common::{
+    EncodingJob, Event, EventPayload, IpcMessage, Request, RequestPayload, Response,
+    ResponsePayload,
+};
+use futures::{SinkExt, StreamExt};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::net::{UnixListener, UnixStream};
-use tokio::io::{AsyncWriteExt};
 use tokio::sync::mpsc;
-use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
-use futures::{SinkExt, StreamExt};
-use tracing::{info, error, warn};
-use anyhow::Result;
-use encodetalker_common::{
-    IpcMessage, Request, Response, ResponsePayload, Event, EventPayload,
-    RequestPayload, EncodingJob,
-};
-use crate::queue::{QueueManager, QueueEvent};
+use tokio_util::codec::LengthDelimitedCodec;
+use tracing::{error, info, warn};
 
 /// Serveur IPC Unix socket
 pub struct IpcServer {
@@ -37,10 +36,13 @@ impl IpcServer {
     pub async fn run_with_listener(
         &self,
         listener: Option<UnixListener>,
-        mut event_rx: mpsc::UnboundedReceiver<QueueEvent>
+        mut event_rx: mpsc::UnboundedReceiver<QueueEvent>,
     ) -> Result<()> {
         let listener = if let Some(l) = listener {
-            info!("Utilisation du listener existant sur {:?}", self.socket_path);
+            info!(
+                "Utilisation du listener existant sur {:?}",
+                self.socket_path
+            );
             l
         } else {
             // Supprimer l'ancien socket s'il existe
@@ -62,11 +64,21 @@ impl IpcServer {
             while let Some(event) = event_rx.recv().await {
                 let ipc_event = match event {
                     QueueEvent::JobAdded(id) => Event::new(EventPayload::JobAdded { job_id: id }),
-                    QueueEvent::JobStarted(id) => Event::new(EventPayload::JobStarted { job_id: id }),
-                    QueueEvent::JobProgress(id, stats) => Event::new(EventPayload::JobProgress { job_id: id, stats }),
-                    QueueEvent::JobCompleted(id) => Event::new(EventPayload::JobCompleted { job_id: id }),
-                    QueueEvent::JobFailed(id, error) => Event::new(EventPayload::JobFailed { job_id: id, error }),
-                    QueueEvent::JobCancelled(id) => Event::new(EventPayload::JobCancelled { job_id: id }),
+                    QueueEvent::JobStarted(id) => {
+                        Event::new(EventPayload::JobStarted { job_id: id })
+                    }
+                    QueueEvent::JobProgress(id, stats) => {
+                        Event::new(EventPayload::JobProgress { job_id: id, stats })
+                    }
+                    QueueEvent::JobCompleted(id) => {
+                        Event::new(EventPayload::JobCompleted { job_id: id })
+                    }
+                    QueueEvent::JobFailed(id, error) => {
+                        Event::new(EventPayload::JobFailed { job_id: id, error })
+                    }
+                    QueueEvent::JobCancelled(id) => {
+                        Event::new(EventPayload::JobCancelled { job_id: id })
+                    }
                 };
 
                 let _ = broadcast_tx_clone.send(ipc_event);
@@ -80,7 +92,9 @@ impl IpcServer {
                     let queue_manager = self.queue_manager.clone();
                     let broadcast_rx = broadcast_tx.subscribe();
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_client(stream, queue_manager, broadcast_rx).await {
+                        if let Err(e) =
+                            Self::handle_client(stream, queue_manager, broadcast_rx).await
+                        {
                             error!("Erreur client: {}", e);
                         }
                     });
@@ -104,7 +118,8 @@ impl IpcServer {
         let length_framed = tokio_util::codec::Framed::new(stream, LengthDelimitedCodec::new());
 
         // Wrap avec tokio-serde pour bincode
-        let mut framed = SerdeFramed::new(length_framed, Bincode::<IpcMessage, IpcMessage>::default());
+        let framed =
+            SerdeFramed::new(length_framed, Bincode::<IpcMessage, IpcMessage>::default());
 
         // Split pour lecture et écriture
         let (mut writer, mut reader) = framed.split();
@@ -158,7 +173,11 @@ impl IpcServer {
         let request_id = request.id;
 
         match request.payload {
-            RequestPayload::AddJob { input_path, output_path, config } => {
+            RequestPayload::AddJob {
+                input_path,
+                output_path,
+                config,
+            } => {
                 let job = EncodingJob::new(input_path, output_path, config);
                 match queue_manager.add_job(job.clone()).await {
                     Ok(job_id) => Response::new(request_id, ResponsePayload::JobId { job_id }),
@@ -166,19 +185,15 @@ impl IpcServer {
                 }
             }
 
-            RequestPayload::CancelJob { job_id } => {
-                match queue_manager.cancel_job(job_id).await {
-                    Ok(()) => Response::ok(request_id),
-                    Err(e) => Response::error(request_id, e.to_string()),
-                }
-            }
+            RequestPayload::CancelJob { job_id } => match queue_manager.cancel_job(job_id).await {
+                Ok(()) => Response::ok(request_id),
+                Err(e) => Response::error(request_id, e.to_string()),
+            },
 
-            RequestPayload::RetryJob { job_id } => {
-                match queue_manager.retry_job(job_id).await {
-                    Ok(()) => Response::ok(request_id),
-                    Err(e) => Response::error(request_id, e.to_string()),
-                }
-            }
+            RequestPayload::RetryJob { job_id } => match queue_manager.retry_job(job_id).await {
+                Ok(()) => Response::ok(request_id),
+                Err(e) => Response::error(request_id, e.to_string()),
+            },
 
             RequestPayload::ListQueue => {
                 let jobs = queue_manager.get_queue().await;
@@ -195,29 +210,23 @@ impl IpcServer {
                 Response::new(request_id, ResponsePayload::JobList { jobs })
             }
 
-            RequestPayload::GetJob { job_id } => {
-                match queue_manager.get_job(job_id).await {
-                    Some(job) => Response::new(request_id, ResponsePayload::Job { job: Box::new(job) }),
-                    None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
-                }
-            }
+            RequestPayload::GetJob { job_id } => match queue_manager.get_job(job_id).await {
+                Some(job) => Response::new(request_id, ResponsePayload::Job { job: Box::new(job) }),
+                None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
+            },
 
-            RequestPayload::GetStats { job_id } => {
-                match queue_manager.get_job(job_id).await {
-                    Some(job) => match job.stats {
-                        Some(stats) => Response::new(request_id, ResponsePayload::Stats { stats }),
-                        None => Response::error(request_id, "Job sans stats".to_string()),
-                    }
-                    None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
-                }
-            }
+            RequestPayload::GetStats { job_id } => match queue_manager.get_job(job_id).await {
+                Some(job) => match job.stats {
+                    Some(stats) => Response::new(request_id, ResponsePayload::Stats { stats }),
+                    None => Response::error(request_id, "Job sans stats".to_string()),
+                },
+                None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
+            },
 
-            RequestPayload::ClearHistory => {
-                match queue_manager.clear_history().await {
-                    Ok(()) => Response::ok(request_id),
-                    Err(e) => Response::error(request_id, e.to_string()),
-                }
-            }
+            RequestPayload::ClearHistory => match queue_manager.clear_history().await {
+                Ok(()) => Response::ok(request_id),
+                Err(e) => Response::error(request_id, e.to_string()),
+            },
 
             RequestPayload::Shutdown => {
                 info!("Shutdown demandé par un client");
@@ -225,9 +234,7 @@ impl IpcServer {
                 Response::ok(request_id)
             }
 
-            RequestPayload::Ping => {
-                Response::new(request_id, ResponsePayload::Pong)
-            }
+            RequestPayload::Ping => Response::new(request_id, ResponsePayload::Pong),
         }
     }
 }

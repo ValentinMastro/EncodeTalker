@@ -1,7 +1,7 @@
+use super::super::types::{EncodingConfig, EncodingJob, EncodingStats};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use super::super::types::{EncodingJob, EncodingStats, EncodingConfig};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 /// Requête du client vers le daemon
 #[derive(Debug, Clone, Serialize, Deserialize)]

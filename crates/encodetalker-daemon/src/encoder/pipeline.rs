@@ -1,12 +1,12 @@
+use super::{probe_video, StatsParser, VideoInfo};
+use anyhow::{Context, Result};
+use encodetalker_common::{AudioMode, EncoderType, EncodingJob, EncodingStats};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tokio::sync::mpsc;
-use anyhow::{Result, Context};
-use tracing::{info, error, debug};
-use encodetalker_common::{EncodingJob, EncodingStats, EncoderType, AudioMode};
-use super::{probe_video, StatsParser, VideoInfo};
+use tracing::info;
 
 /// Pipeline d'encodage complet
 pub struct EncodingPipeline {
@@ -41,14 +41,20 @@ impl EncodingPipeline {
         stats_tx: mpsc::UnboundedSender<EncodingStats>,
         mut cancel_rx: mpsc::UnboundedReceiver<()>,
     ) -> Result<()> {
-        info!("Début d'encodage: {} -> {}", job.input_path.display(), job.output_path.display());
+        info!(
+            "Début d'encodage: {} -> {}",
+            job.input_path.display(),
+            job.output_path.display()
+        );
 
         // 1. Probe du fichier source
-        let video_info = probe_video(&self.ffprobe_bin, &job.input_path)
-            .context("Échec du probe vidéo")?;
+        let video_info =
+            probe_video(&self.ffprobe_bin, &job.input_path).context("Échec du probe vidéo")?;
 
-        info!("Vidéo: {}x{} @ {:.2} fps, durée: {:?}",
-            video_info.width, video_info.height, video_info.fps, video_info.duration);
+        info!(
+            "Vidéo: {}x{} @ {:.2} fps, durée: {:?}",
+            video_info.width, video_info.height, video_info.fps, video_info.duration
+        );
 
         // 2. Préparer les chemins temporaires
         let temp_dir = job.output_path.parent().unwrap();
@@ -56,19 +62,30 @@ impl EncodingPipeline {
         let audio_temp = temp_dir.join(format!("{}.opus", uuid::Uuid::new_v4()));
 
         // 3. Encoder la vidéo
-        self.encode_video(job, &video_info, &video_temp, stats_tx.clone(), &mut cancel_rx).await?;
+        self.encode_video(
+            job,
+            &video_info,
+            &video_temp,
+            stats_tx.clone(),
+            &mut cancel_rx,
+        )
+        .await?;
 
         // 4. Encoder l'audio (en parallèle possible, mais pour simplifier on le fait après)
         self.encode_audio(job, &audio_temp).await?;
 
         // 5. Muxer le tout
-        self.mux_final(job, &video_temp, &audio_temp, &video_info).await?;
+        self.mux_final(job, &video_temp, &audio_temp, &video_info)
+            .await?;
 
         // 6. Nettoyer les fichiers temporaires
         let _ = tokio::fs::remove_file(&video_temp).await;
         let _ = tokio::fs::remove_file(&audio_temp).await;
 
-        info!("Encodage terminé avec succès: {}", job.output_path.display());
+        info!(
+            "Encodage terminé avec succès: {}",
+            job.output_path.display()
+        );
         Ok(())
     }
 
@@ -85,10 +102,14 @@ impl EncodingPipeline {
 
         // Construire la commande ffmpeg (demux + raw video)
         let mut ffmpeg = Command::new(&self.ffmpeg_bin)
-            .arg("-i").arg(&job.input_path)
-            .arg("-f").arg("yuv4mpegpipe")
-            .arg("-pix_fmt").arg("yuv420p")
-            .arg("-strict").arg("-1")
+            .arg("-i")
+            .arg(&job.input_path)
+            .arg("-f")
+            .arg("yuv4mpegpipe")
+            .arg("-pix_fmt")
+            .arg("yuv420p")
+            .arg("-strict")
+            .arg("-1")
             .arg("-")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -111,9 +132,10 @@ impl EncodingPipeline {
         let mut ffmpeg_stdout = ffmpeg.stdout.take().unwrap();
         let mut encoder_stdin = encoder.stdin.take().unwrap();
 
-        let pipe_task = tokio::spawn(async move {
-            tokio::io::copy(&mut ffmpeg_stdout, &mut encoder_stdin).await
-        });
+        let pipe_task =
+            tokio::spawn(
+                async move { tokio::io::copy(&mut ffmpeg_stdout, &mut encoder_stdin).await },
+            );
 
         // Parser stderr de ffmpeg pour les stats
         let ffmpeg_stderr = ffmpeg.stderr.take().unwrap();
@@ -156,10 +178,14 @@ impl EncodingPipeline {
     fn build_svt_av1_command(&self, job: &EncodingJob, output: &Path) -> Command {
         let mut cmd = Command::new(&self.svt_av1_bin);
 
-        cmd.arg("-i").arg("stdin")
-            .arg("--crf").arg(job.config.encoder_params.crf.to_string())
-            .arg("--preset").arg(job.config.encoder_params.preset.to_string())
-            .arg("-b").arg(output);
+        cmd.arg("-i")
+            .arg("stdin")
+            .arg("--crf")
+            .arg(job.config.encoder_params.crf.to_string())
+            .arg("--preset")
+            .arg(job.config.encoder_params.preset.to_string())
+            .arg("-b")
+            .arg(output);
 
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {
@@ -174,11 +200,14 @@ impl EncodingPipeline {
         let mut cmd = Command::new(&self.aom_bin);
 
         cmd.arg("-")
-            .arg("--cq-level").arg(job.config.encoder_params.crf.to_string())
-            .arg("--cpu-used").arg(job.config.encoder_params.preset.to_string())
+            .arg("--cq-level")
+            .arg(job.config.encoder_params.crf.to_string())
+            .arg("--cpu-used")
+            .arg(job.config.encoder_params.preset.to_string())
             .arg("--end-usage=q")
             .arg("--ivf")
-            .arg("-o").arg(output);
+            .arg("-o")
+            .arg(output);
 
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {
@@ -195,10 +224,13 @@ impl EncodingPipeline {
         match &job.config.audio_mode {
             AudioMode::Opus { bitrate } => {
                 let mut cmd = Command::new(&self.ffmpeg_bin);
-                cmd.arg("-i").arg(&job.input_path)
+                cmd.arg("-i")
+                    .arg(&job.input_path)
                     .arg("-vn") // Pas de vidéo
-                    .arg("-c:a").arg("libopus")
-                    .arg("-b:a").arg(format!("{}k", bitrate));
+                    .arg("-c:a")
+                    .arg("libopus")
+                    .arg("-b:a")
+                    .arg(format!("{}k", bitrate));
 
                 // Sélectionner les streams audio spécifiques si configuré
                 if let Some(streams) = &job.config.audio_streams {
@@ -211,8 +243,7 @@ impl EncodingPipeline {
 
                 cmd.arg(output);
 
-                let output = cmd.output().await
-                    .context("Échec de l'encodage audio")?;
+                let output = cmd.output().await.context("Échec de l'encodage audio")?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -222,9 +253,11 @@ impl EncodingPipeline {
             AudioMode::Copy => {
                 // Copie directe sans ré-encodage
                 let mut cmd = Command::new(&self.ffmpeg_bin);
-                cmd.arg("-i").arg(&job.input_path)
+                cmd.arg("-i")
+                    .arg(&job.input_path)
                     .arg("-vn")
-                    .arg("-c:a").arg("copy");
+                    .arg("-c:a")
+                    .arg("copy");
 
                 if let Some(streams) = &job.config.audio_streams {
                     for stream_idx in streams {
@@ -236,8 +269,7 @@ impl EncodingPipeline {
 
                 cmd.arg(output);
 
-                let output = cmd.output().await
-                    .context("Échec de la copie audio")?;
+                let output = cmd.output().await.context("Échec de la copie audio")?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -247,13 +279,18 @@ impl EncodingPipeline {
             AudioMode::Custom { codec, bitrate } => {
                 // Custom codec
                 let mut cmd = Command::new(&self.ffmpeg_bin);
-                cmd.arg("-i").arg(&job.input_path)
+                cmd.arg("-i")
+                    .arg(&job.input_path)
                     .arg("-vn")
-                    .arg("-c:a").arg(codec)
-                    .arg("-b:a").arg(format!("{}k", bitrate))
+                    .arg("-c:a")
+                    .arg(codec)
+                    .arg("-b:a")
+                    .arg(format!("{}k", bitrate))
                     .arg(output);
 
-                let output = cmd.output().await
+                let output = cmd
+                    .output()
+                    .await
                     .context("Échec de l'encodage audio custom")?;
 
                 if !output.status.success() {
@@ -278,7 +315,8 @@ impl EncodingPipeline {
 
         let mut cmd = Command::new(&self.mkvmerge_bin);
 
-        cmd.arg("-o").arg(&job.output_path)
+        cmd.arg("-o")
+            .arg(&job.output_path)
             .arg(video_path)
             .arg(audio_path);
 
@@ -292,8 +330,7 @@ impl EncodingPipeline {
             cmd.arg(&job.input_path);
         }
 
-        let output = cmd.output().await
-            .context("Échec du muxage")?;
+        let output = cmd.output().await.context("Échec du muxage")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

@@ -1,6 +1,6 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use anyhow::Result;
 
 /// Configuration du daemon
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +71,12 @@ impl Default for DaemonConfig {
                 svt_av1: SvtAv1Settings {
                     preset: 6,
                     crf: 30,
-                    params: vec!["--keyint".to_string(), "240".to_string(), "--tune".to_string(), "3".to_string()],
+                    params: vec![
+                        "--keyint".to_string(),
+                        "240".to_string(),
+                        "--tune".to_string(),
+                        "3".to_string(),
+                    ],
                 },
                 aom: AomSettings {
                     cpu_used: 4,
@@ -79,7 +84,13 @@ impl Default for DaemonConfig {
                 },
             },
             ui: UiSettings {
-                file_extensions: vec![".mp4".to_string(), ".mkv".to_string(), ".avi".to_string(), ".mov".to_string(), ".webm".to_string()],
+                file_extensions: vec![
+                    ".mp4".to_string(),
+                    ".mkv".to_string(),
+                    ".avi".to_string(),
+                    ".mov".to_string(),
+                    ".webm".to_string(),
+                ],
                 refresh_interval_ms: 500,
             },
         }
@@ -97,7 +108,10 @@ impl DaemonConfig {
     /// Charger la configuration avec fallback sur défaut
     pub fn load_or_default(path: &PathBuf) -> Self {
         Self::load_from_file(path).unwrap_or_else(|_| {
-            tracing::warn!("Impossible de charger la config depuis {:?}, utilisation des valeurs par défaut", path);
+            tracing::warn!(
+                "Impossible de charger la config depuis {:?}, utilisation des valeurs par défaut",
+                path
+            );
             Self::default()
         })
     }

@@ -1,27 +1,25 @@
+use anyhow::{Context, Result};
+use futures::{SinkExt, StreamExt};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::net::UnixStream;
 use tokio::sync::mpsc;
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
-use futures::{SinkExt, StreamExt};
-use anyhow::{Result, Context};
-use tracing::{info, error, debug};
-use uuid::Uuid;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use encodetalker_common::{
-    IpcMessage, Request, Response, Event, RequestPayload, ResponsePayload,
-    EncodingJob, EncodingConfig, EncodingStats,
+    EncodingConfig, EncodingJob, Event, IpcMessage, Request, RequestPayload,
+    Response, ResponsePayload,
 };
 
 /// Client IPC pour communiquer avec le daemon
 pub struct IpcClient {
     /// Sender pour envoyer des requêtes
     request_tx: mpsc::UnboundedSender<Request>,
-    /// Receiver pour recevoir des réponses
-    response_rx: Arc<Mutex<mpsc::UnboundedReceiver<Response>>>,
     /// Receiver pour recevoir des événements
     event_rx: Arc<Mutex<mpsc::UnboundedReceiver<Event>>>,
     /// Map des pending responses (par request_id)
@@ -31,7 +29,8 @@ pub struct IpcClient {
 impl IpcClient {
     /// Se connecter au daemon
     pub async fn connect(socket_path: impl AsRef<Path>) -> Result<Self> {
-        let stream = UnixStream::connect(socket_path.as_ref()).await
+        let stream = UnixStream::connect(socket_path.as_ref())
+            .await
             .context("Échec de connexion au daemon")?;
 
         info!("Connecté au daemon");
@@ -45,7 +44,6 @@ impl IpcClient {
 
         // Channels pour communication interne
         let (request_tx, mut request_rx) = mpsc::unbounded_channel::<Request>();
-        let (response_tx, response_rx) = mpsc::unbounded_channel::<Response>();
         let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
         let pending_responses: Arc<Mutex<HashMap<Uuid, tokio::sync::oneshot::Sender<Response>>>> =
@@ -75,8 +73,8 @@ impl IpcClient {
                         if let Some(tx) = pending.remove(&response.request_id) {
                             let _ = tx.send(response);
                         } else {
-                            // Réponse non attendue, envoyer au channel général
-                            let _ = response_tx.send(response);
+                            // Réponse non attendue, on l'ignore
+                            debug!("Réponse non attendue pour request_id: {}", response.request_id);
                         }
                     }
                     Ok(IpcMessage::Event(event)) => {
@@ -96,7 +94,6 @@ impl IpcClient {
 
         Ok(Self {
             request_tx,
-            response_rx: Arc::new(Mutex::new(response_rx)),
             event_rx: Arc::new(Mutex::new(event_rx)),
             pending_responses,
         })
@@ -114,7 +111,8 @@ impl IpcClient {
         self.pending_responses.lock().await.insert(request_id, tx);
 
         // Envoyer la requête
-        self.request_tx.send(request)
+        self.request_tx
+            .send(request)
             .context("Échec d'envoi de requête")?;
 
         // Attendre la réponse avec timeout
@@ -133,11 +131,13 @@ impl IpcClient {
         output_path: std::path::PathBuf,
         config: EncodingConfig,
     ) -> Result<Uuid> {
-        let response = self.send_request(RequestPayload::AddJob {
-            input_path,
-            output_path,
-            config,
-        }).await?;
+        let response = self
+            .send_request(RequestPayload::AddJob {
+                input_path,
+                output_path,
+                config,
+            })
+            .await?;
 
         match response.payload {
             ResponsePayload::JobId { job_id } => Ok(job_id),
@@ -148,7 +148,9 @@ impl IpcClient {
 
     /// Annuler un job
     pub async fn cancel_job(&self, job_id: Uuid) -> Result<()> {
-        let response = self.send_request(RequestPayload::CancelJob { job_id }).await?;
+        let response = self
+            .send_request(RequestPayload::CancelJob { job_id })
+            .await?;
 
         match response.payload {
             ResponsePayload::Ok => Ok(()),
@@ -159,7 +161,9 @@ impl IpcClient {
 
     /// Retry un job failed
     pub async fn retry_job(&self, job_id: Uuid) -> Result<()> {
-        let response = self.send_request(RequestPayload::RetryJob { job_id }).await?;
+        let response = self
+            .send_request(RequestPayload::RetryJob { job_id })
+            .await?;
 
         match response.payload {
             ResponsePayload::Ok => Ok(()),
@@ -228,7 +232,9 @@ impl IpcClient {
     }
 
     /// Rafraîchir toutes les listes
-    pub async fn refresh_all(&self) -> Result<(Vec<EncodingJob>, Vec<EncodingJob>, Vec<EncodingJob>)> {
+    pub async fn refresh_all(
+        &self,
+    ) -> Result<(Vec<EncodingJob>, Vec<EncodingJob>, Vec<EncodingJob>)> {
         let queue = self.list_queue().await?;
         let active = self.list_active().await?;
         let history = self.list_history().await?;
@@ -263,6 +269,7 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
 
     #[cfg(unix)]
     {
+        #[allow(unused_imports)]
         use std::os::unix::process::CommandExt;
         // Démarrer dans un nouveau groupe de processus
         unsafe {

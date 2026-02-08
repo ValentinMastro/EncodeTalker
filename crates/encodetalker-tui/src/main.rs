@@ -1,26 +1,24 @@
-use std::io;
-use std::time::Duration;
+use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
-use anyhow::Result;
-use tracing::{info, error};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
+use std::time::Duration;
+use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use encodetalker_common::AppPaths;
-use encodetalker_tui::{AppState, IpcClient, render_ui, handle_key_event, InputAction, ensure_daemon_running};
+use encodetalker_tui::{
+    ensure_daemon_running, handle_key_event, render_ui, AppState, InputAction, IpcClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialiser le logging
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(filter)
@@ -44,7 +42,9 @@ async fn main() -> Result<()> {
     info!("Vérification du daemon...");
     if let Err(e) = ensure_daemon_running(&daemon_bin, &paths.socket_path).await {
         eprintln!("Échec du démarrage du daemon: {}", e);
-        eprintln!("Assurez-vous que le binaire encodetalker-daemon est présent dans le même répertoire.");
+        eprintln!(
+            "Assurez-vous que le binaire encodetalker-daemon est présent dans le même répertoire."
+        );
         return Err(e);
     }
 
@@ -107,8 +107,15 @@ async fn main() -> Result<()> {
                             app_state.history_jobs = history;
                         }
                     }
-                    InputAction::AddJob { input_path, output_path, config } => {
-                        match client.add_job(input_path.clone(), output_path, config).await {
+                    InputAction::AddJob {
+                        input_path,
+                        output_path,
+                        config,
+                    } => {
+                        match client
+                            .add_job(input_path.clone(), output_path, config)
+                            .await
+                        {
                             Ok(job_id) => {
                                 app_state.set_status(format!("Job {} ajouté", job_id));
                                 // Rafraîchir les listes
@@ -161,19 +168,17 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
-                    InputAction::ClearHistory => {
-                        match client.clear_history().await {
-                            Ok(()) => {
-                                app_state.set_status("Historique effacé");
-                                app_state.history_jobs.clear();
-                            }
-                            Err(e) => {
-                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec du clear: {}", e),
-                                });
-                            }
+                    InputAction::ClearHistory => match client.clear_history().await {
+                        Ok(()) => {
+                            app_state.set_status("Historique effacé");
+                            app_state.history_jobs.clear();
                         }
-                    }
+                        Err(e) => {
+                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                message: format!("Échec du clear: {}", e),
+                            });
+                        }
+                    },
                 }
             }
         }
@@ -185,11 +190,11 @@ async fn main() -> Result<()> {
             // Recevoir les événements du daemon
             while let Some(event) = client.poll_event().await {
                 match event.payload {
-                    encodetalker_common::EventPayload::JobAdded { .. } |
-                    encodetalker_common::EventPayload::JobStarted { .. } |
-                    encodetalker_common::EventPayload::JobCompleted { .. } |
-                    encodetalker_common::EventPayload::JobFailed { .. } |
-                    encodetalker_common::EventPayload::JobCancelled { .. } => {
+                    encodetalker_common::EventPayload::JobAdded { .. }
+                    | encodetalker_common::EventPayload::JobStarted { .. }
+                    | encodetalker_common::EventPayload::JobCompleted { .. }
+                    | encodetalker_common::EventPayload::JobFailed { .. }
+                    | encodetalker_common::EventPayload::JobCancelled { .. } => {
                         // Rafraîchir les listes
                         if let Ok((queue, active, history)) = client.refresh_all().await {
                             app_state.queue_jobs = queue;
@@ -199,7 +204,8 @@ async fn main() -> Result<()> {
                     }
                     encodetalker_common::EventPayload::JobProgress { job_id, stats } => {
                         // Mettre à jour les stats du job
-                        if let Some(job) = app_state.active_jobs.iter_mut().find(|j| j.id == job_id) {
+                        if let Some(job) = app_state.active_jobs.iter_mut().find(|j| j.id == job_id)
+                        {
                             job.stats = Some(stats);
                         }
                     }

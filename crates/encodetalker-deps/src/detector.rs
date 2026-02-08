@@ -108,11 +108,21 @@ impl DependencyStatus {
 
     pub fn missing(&self) -> Vec<&str> {
         let mut missing = Vec::new();
-        if !self.ffmpeg { missing.push("ffmpeg"); }
-        if !self.ffprobe { missing.push("ffprobe"); }
-        if !self.svt_av1 { missing.push("SvtAv1EncApp"); }
-        if !self.aomenc { missing.push("aomenc"); }
-        if !self.mkvmerge { missing.push("mkvmerge"); }
+        if !self.ffmpeg {
+            missing.push("ffmpeg");
+        }
+        if !self.ffprobe {
+            missing.push("ffprobe");
+        }
+        if !self.svt_av1 {
+            missing.push("SvtAv1EncApp");
+        }
+        if !self.aomenc {
+            missing.push("aomenc");
+        }
+        if !self.mkvmerge {
+            missing.push("mkvmerge");
+        }
         missing
     }
 }

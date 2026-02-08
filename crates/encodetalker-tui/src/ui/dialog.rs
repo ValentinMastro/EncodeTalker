@@ -1,8 +1,5 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
 use crate::app::{AppState, Dialog};
+use ratatui::{prelude::*, widgets::*};
 
 /// Rendre un dialogue par-dessus l'interface
 pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -16,7 +13,11 @@ pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Rendre le dialogue de configuration d'encodage
-fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::app::EncodeConfigDialog) {
+fn render_encode_config_dialog(
+    frame: &mut Frame,
+    area: Rect,
+    config: &crate::app::EncodeConfigDialog,
+) {
     // Centrer le dialogue
     let dialog_area = centered_rect(70, 60, area);
 
@@ -49,20 +50,20 @@ fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::ap
 
     // Input file
     let input_text = format!("Input:  {}", config.input_path.display());
-    let input = Paragraph::new(input_text)
-        .style(Style::default().fg(Color::White));
+    let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
     frame.render_widget(input, chunks[0]);
 
     // Output file
     let output_text = format!("Output: {}", config.output_path.display());
-    let output = Paragraph::new(output_text)
-        .style(Style::default().fg(Color::White));
+    let output = Paragraph::new(output_text).style(Style::default().fg(Color::White));
     frame.render_widget(output, chunks[1]);
 
     // Encoder
     let encoder_text = format!("Encoder: {}", config.config.encoder);
     let encoder_style = if config.selected_field == 0 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
@@ -71,12 +72,18 @@ fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::ap
 
     // Audio mode
     let audio_text = match &config.config.audio_mode {
-        encodetalker_common::AudioMode::Opus { bitrate } => format!("Audio:   Opus {} kbps", bitrate),
+        encodetalker_common::AudioMode::Opus { bitrate } => {
+            format!("Audio:   Opus {} kbps", bitrate)
+        }
         encodetalker_common::AudioMode::Copy => "Audio:   Copy".to_string(),
-        encodetalker_common::AudioMode::Custom { codec, bitrate } => format!("Audio:   {} {} kbps", codec, bitrate),
+        encodetalker_common::AudioMode::Custom { codec, bitrate } => {
+            format!("Audio:   {} {} kbps", codec, bitrate)
+        }
     };
     let audio_style = if config.selected_field == 1 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
@@ -84,9 +91,14 @@ fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::ap
     frame.render_widget(audio, chunks[3]);
 
     // CRF
-    let crf_text = format!("CRF:     {} (0-51, lower = better quality)", config.config.encoder_params.crf);
+    let crf_text = format!(
+        "CRF:     {} (0-51, lower = better quality)",
+        config.config.encoder_params.crf
+    );
     let crf_style = if config.selected_field == 2 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
@@ -98,9 +110,14 @@ fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::ap
         encodetalker_common::EncoderType::SvtAv1 => 13,
         encodetalker_common::EncoderType::Aom => 8,
     };
-    let preset_text = format!("Preset:  {} (0-{}, higher = faster)", config.config.encoder_params.preset, max_preset);
+    let preset_text = format!(
+        "Preset:  {} (0-{}, higher = faster)",
+        config.config.encoder_params.preset, max_preset
+    );
     let preset_style = if config.selected_field == 3 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White)
     };
@@ -108,9 +125,10 @@ fn render_encode_config_dialog(frame: &mut Frame, area: Rect, config: &crate::ap
     frame.render_widget(preset, chunks[5]);
 
     // Instructions
-    let instructions = Paragraph::new("↑↓: Navigate | ←→: Change value | Enter: Add to queue | ESC: Cancel")
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::DarkGray));
+    let instructions =
+        Paragraph::new("↑↓: Navigate | ←→: Change value | Enter: Add to queue | ESC: Cancel")
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[6]);
 }
 
@@ -132,10 +150,7 @@ fn render_confirm_dialog(frame: &mut Frame, area: Rect, message: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(2),
-        ])
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(inner);
 
     let text = Paragraph::new(message)
@@ -168,10 +183,7 @@ fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(1),
-        ])
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(inner);
 
     let text = Paragraph::new(message)

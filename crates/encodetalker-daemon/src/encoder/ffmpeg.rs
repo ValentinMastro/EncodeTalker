@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
+use serde::Deserialize;
 use std::path::Path;
-use std::time::Duration;
-use anyhow::{Result, Context};
-use serde::{Deserialize, Serialize};
 use std::process::Command;
+use std::time::Duration;
 
 /// Informations sur le fichier vidéo source
 #[derive(Debug, Clone)]
@@ -42,7 +42,6 @@ struct FFProbeOutput {
 #[derive(Debug, Deserialize)]
 struct FFProbeFormat {
     duration: Option<String>,
-    nb_streams: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,9 +65,11 @@ struct FFProbeTags {
 /// Prober un fichier vidéo avec ffprobe
 pub fn probe_video(ffprobe_bin: &Path, input: &Path) -> Result<VideoInfo> {
     let output = Command::new(ffprobe_bin)
-        .args(&[
-            "-v", "quiet",
-            "-print_format", "json",
+        .args([
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
             input.to_str().unwrap(),
@@ -82,16 +83,20 @@ pub fn probe_video(ffprobe_bin: &Path, input: &Path) -> Result<VideoInfo> {
     }
 
     let json = String::from_utf8(output.stdout)?;
-    let probe: FFProbeOutput = serde_json::from_str(&json)
-        .context("Échec du parsing de la sortie ffprobe")?;
+    let probe: FFProbeOutput =
+        serde_json::from_str(&json).context("Échec du parsing de la sortie ffprobe")?;
 
     // Extraire durée
-    let duration = probe.format.duration
+    let duration = probe
+        .format
+        .duration
         .and_then(|d| d.parse::<f64>().ok())
         .map(Duration::from_secs_f64);
 
     // Trouver le stream vidéo principal
-    let video_stream = probe.streams.iter()
+    let video_stream = probe
+        .streams
+        .iter()
         .find(|s| s.codec_type == "video")
         .context("Aucun stream vidéo trouvé")?;
 
@@ -99,18 +104,22 @@ pub fn probe_video(ffprobe_bin: &Path, input: &Path) -> Result<VideoInfo> {
     let height = video_stream.height.context("Hauteur manquante")?;
 
     // Parser FPS (format: "24000/1001" ou "24")
-    let fps = video_stream.r_frame_rate
+    let fps = video_stream
+        .r_frame_rate
         .as_ref()
         .and_then(|r| parse_frame_rate(r))
         .unwrap_or(30.0);
 
     // Parser total frames
-    let total_frames = video_stream.nb_frames
+    let total_frames = video_stream
+        .nb_frames
         .as_ref()
         .and_then(|f| f.parse::<u64>().ok());
 
     // Extraire streams audio
-    let audio_streams = probe.streams.iter()
+    let audio_streams = probe
+        .streams
+        .iter()
         .filter(|s| s.codec_type == "audio")
         .map(|s| AudioStreamInfo {
             index: s.index as usize,
@@ -121,7 +130,9 @@ pub fn probe_video(ffprobe_bin: &Path, input: &Path) -> Result<VideoInfo> {
         .collect();
 
     // Extraire streams sous-titres
-    let subtitle_streams = probe.streams.iter()
+    let subtitle_streams = probe
+        .streams
+        .iter()
         .filter(|s| s.codec_type == "subtitle")
         .map(|s| SubtitleStreamInfo {
             index: s.index as usize,

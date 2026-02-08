@@ -1,8 +1,6 @@
-use std::path::PathBuf;
-use tracing::{info, error};
-use crate::{Result, DepsError, Downloader, DependencyBuilder};
-
-const FFMPEG_VERSION: &str = "6.1";
+use crate::{DependencyBuilder, DepsError, Downloader, Result};
+use std::path::{Path, PathBuf};
+use tracing::{error, info};
 const FFMPEG_URL: &str = "https://ffmpeg.org/releases/ffmpeg-6.1.tar.xz";
 
 pub struct FFmpegBuilder {
@@ -30,7 +28,8 @@ impl DependencyBuilder for FFmpegBuilder {
     }
 
     async fn download(&self) -> Result<PathBuf> {
-        let archive = self.downloader
+        let archive = self
+            .downloader
             .download_tarball(FFMPEG_URL, "ffmpeg-6.1.tar.xz")
             .await?;
 
@@ -45,7 +44,7 @@ impl DependencyBuilder for FFmpegBuilder {
         // Configure
         let configure_output = tokio::process::Command::new("./configure")
             .current_dir(&source_dir)
-            .args(&[
+            .args([
                 &format!("--prefix={}", install_prefix.display()),
                 "--enable-gpl",
                 "--enable-libopus",
@@ -71,7 +70,7 @@ impl DependencyBuilder for FFmpegBuilder {
         let num_cores = self.get_num_cores();
         let make_output = tokio::process::Command::new("make")
             .current_dir(&source_dir)
-            .args(&["-j", &num_cores.to_string()])
+            .args(["-j", &num_cores.to_string()])
             .output()
             .await?;
 
@@ -100,7 +99,7 @@ impl DependencyBuilder for FFmpegBuilder {
         Ok(())
     }
 
-    fn verify(&self, bin_dir: &PathBuf) -> bool {
+    fn verify(&self, bin_dir: &Path) -> bool {
         let ffmpeg = bin_dir.join("ffmpeg");
         let ffprobe = bin_dir.join("ffprobe");
 

@@ -1,8 +1,5 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
 use crate::app::{AppState, View};
+use ratatui::{prelude::*, widgets::*};
 
 /// Rendre l'interface complète
 pub fn render_ui(frame: &mut Frame, state: &AppState) {
@@ -12,9 +9,9 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(0),     // Contenu
-            Constraint::Length(1),  // Footer
+            Constraint::Length(3), // Header
+            Constraint::Min(0),    // Contenu
+            Constraint::Length(1), // Footer
         ])
         .split(area);
 
@@ -49,13 +46,14 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
     };
 
     let tabs = Tabs::new(titles)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title("EncodeTalker")
-        )
+        .block(Block::default().borders(Borders::ALL).title("EncodeTalker"))
         .select(selected)
         .style(Style::default().fg(Color::White))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
 
     frame.render_widget(tabs, area);
 }

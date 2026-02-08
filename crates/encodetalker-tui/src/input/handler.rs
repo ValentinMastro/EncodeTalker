@@ -1,6 +1,6 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use encodetalker_common::{EncoderType, AudioMode};
-use crate::app::{AppState, View, Dialog, ConfirmAction, EncodeConfigDialog};
+use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View};
+use crossterm::event::{KeyCode, KeyEvent};
+use encodetalker_common::{AudioMode, EncoderType};
 
 /// Gérer un événement clavier
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
@@ -40,9 +40,17 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
 pub enum InputAction {
     None,
     RefreshLists,
-    AddJob { input_path: std::path::PathBuf, output_path: std::path::PathBuf, config: encodetalker_common::EncodingConfig },
-    CancelJob { job_id: uuid::Uuid },
-    RetryJob { job_id: uuid::Uuid },
+    AddJob {
+        input_path: std::path::PathBuf,
+        output_path: std::path::PathBuf,
+        config: encodetalker_common::EncodingConfig,
+    },
+    CancelJob {
+        job_id: uuid::Uuid,
+    },
+    RetryJob {
+        job_id: uuid::Uuid,
+    },
     ClearHistory,
 }
 
@@ -66,7 +74,9 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
                     state.selected_index = 0;
                 } else if entry.is_video {
                     // Ouvrir le dialogue de configuration
-                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(entry.path.clone())));
+                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
+                        entry.path.clone(),
+                    )));
                 }
             }
             InputAction::None
@@ -75,7 +85,9 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             // Ajouter le fichier sélectionné (shortcut)
             if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
                 if entry.is_video {
-                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(entry.path.clone())));
+                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
+                        entry.path.clone(),
+                    )));
                 }
             }
             InputAction::None
@@ -111,9 +123,7 @@ fn handle_queue_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             }
             InputAction::None
         }
-        KeyCode::Char('r') => {
-            InputAction::RefreshLists
-        }
+        KeyCode::Char('r') => InputAction::RefreshLists,
         _ => InputAction::None,
     }
 }
@@ -139,9 +149,7 @@ fn handle_active_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             }
             InputAction::None
         }
-        KeyCode::Char('r') => {
-            InputAction::RefreshLists
-        }
+        KeyCode::Char('r') => InputAction::RefreshLists,
         _ => InputAction::None,
     }
 }
@@ -183,7 +191,9 @@ fn handle_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
     let dialog = state.dialog.clone();
     match dialog {
         Some(Dialog::EncodeConfig(_)) => handle_encode_config_dialog_key(state, key),
-        Some(Dialog::Confirm { on_confirm, .. }) => handle_confirm_dialog_key(state, key, on_confirm),
+        Some(Dialog::Confirm { on_confirm, .. }) => {
+            handle_confirm_dialog_key(state, key, on_confirm)
+        }
         Some(Dialog::Error { .. }) => {
             // N'importe quelle touche ferme l'erreur
             state.dialog = None;
@@ -279,7 +289,11 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
 }
 
 /// Gérer les touches dans le dialogue de confirmation
-fn handle_confirm_dialog_key(state: &mut AppState, key: KeyEvent, on_confirm: ConfirmAction) -> InputAction {
+fn handle_confirm_dialog_key(
+    state: &mut AppState,
+    key: KeyEvent,
+    on_confirm: ConfirmAction,
+) -> InputAction {
     match key.code {
         KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
             // Confirmer

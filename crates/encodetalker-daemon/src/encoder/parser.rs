@@ -1,12 +1,13 @@
-use regex::Regex;
-use std::time::Duration;
 use encodetalker_common::EncodingStats;
 use once_cell::sync::Lazy;
+use regex::Regex;
+use std::time::Duration;
 
 static FRAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"frame=\s*(\d+)").unwrap());
 static FPS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"fps=\s*([\d.]+)").unwrap());
 static BITRATE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"bitrate=\s*([\d.]+)").unwrap());
-static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})").unwrap());
+static TIME_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})").unwrap());
 
 /// Parser de stats FFmpeg depuis stderr
 pub struct StatsParser {
@@ -15,9 +16,11 @@ pub struct StatsParser {
 
 impl StatsParser {
     pub fn new(total_frames: Option<u64>, total_duration: Option<Duration>) -> Self {
-        let mut stats = EncodingStats::default();
-        stats.total_frames = total_frames;
-        stats.total_duration = total_duration;
+        let stats = EncodingStats {
+            total_frames,
+            total_duration,
+            ..Default::default()
+        };
         Self { stats }
     }
 

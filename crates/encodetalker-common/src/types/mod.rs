@@ -1,7 +1,7 @@
 pub mod job;
-pub mod status;
 pub mod stats;
+pub mod status;
 
 pub use job::*;
-pub use status::*;
 pub use stats::*;
+pub use status::*;

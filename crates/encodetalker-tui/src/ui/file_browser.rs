@@ -1,8 +1,5 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
 use crate::app::AppState;
+use ratatui::{prelude::*, widgets::*};
 
 /// Rendre le navigateur de fichiers
 pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -12,7 +9,10 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
         .border_style(Style::default().fg(Color::Cyan));
 
     // Créer les items de la liste
-    let items: Vec<ListItem> = state.file_browser.entries.iter()
+    let items: Vec<ListItem> = state
+        .file_browser
+        .entries
+        .iter()
         .map(|entry| {
             let icon = if entry.is_dir {
                 "📁"
@@ -23,7 +23,9 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let style = if entry.is_dir {
-                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD)
             } else if entry.is_video {
                 Style::default().fg(Color::Green)
             } else {
@@ -40,7 +42,7 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
         .highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
 

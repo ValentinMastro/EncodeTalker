@@ -1,11 +1,10 @@
-use std::path::PathBuf;
-use tracing::{info, error};
-use encodetalker_common::AppPaths;
 use crate::{
-    Result, DepsError,
-    DependencyDetector, DependencyStatus,
-    DependencyBuilder, FFmpegBuilder, SvtAv1Builder, AomBuilder, MkvtoolnixBuilder,
+    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
+    MkvtoolnixBuilder, Result, SvtAv1Builder,
 };
+use encodetalker_common::AppPaths;
+use std::path::PathBuf;
+use tracing::{error, info};
 
 /// Gestionnaire de dépendances - coordonne téléchargement, compilation et vérification
 pub struct DependencyManager {
@@ -67,7 +66,10 @@ impl DependencyManager {
         // Vérification finale
         let final_status = self.check_status();
         if !final_status.all_present() {
-            error!("Certaines dépendances n'ont pas pu être compilées: {:?}", final_status.missing());
+            error!(
+                "Certaines dépendances n'ont pas pu être compilées: {:?}",
+                final_status.missing()
+            );
             return Err(DepsError::Build("Compilation incomplète".to_string()));
         }
 
@@ -104,7 +106,9 @@ impl DependencyManager {
         let source_dir = builder.download().await?;
 
         info!("Compilation de {}...", builder.name());
-        builder.build(source_dir, self.paths.deps_dir.clone()).await?;
+        builder
+            .build(source_dir, self.paths.deps_dir.clone())
+            .await?;
 
         if builder.verify(&self.paths.deps_bin_dir) {
             info!("{} installé et vérifié avec succès", builder.name());

@@ -17,7 +17,10 @@ pub enum JobStatus {
 
 impl JobStatus {
     pub fn is_terminal(&self) -> bool {
-        matches!(self, JobStatus::Completed | JobStatus::Failed | JobStatus::Cancelled)
+        matches!(
+            self,
+            JobStatus::Completed | JobStatus::Failed | JobStatus::Cancelled
+        )
     }
 
     pub fn is_active(&self) -> bool {

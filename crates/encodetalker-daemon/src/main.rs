@@ -3,20 +3,17 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::sync::mpsc;
 // Ne pas importer Result de anyhow directement à cause de conflits potentiels
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use encodetalker_common::AppPaths;
-use encodetalker_daemon::{
-    DaemonConfig, QueueManager, Persistence, EncodingPipeline, IpcServer,
-};
+use encodetalker_daemon::{DaemonConfig, EncodingPipeline, IpcServer, Persistence, QueueManager};
 use encodetalker_deps::DependencyManager;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialiser le logging
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(filter)
@@ -28,7 +25,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Créer les chemins de l'application
     let paths = AppPaths::new().map_err(|e| anyhow::anyhow!("{}", e))?;
-    paths.ensure_dirs_exist().map_err(|e| anyhow::anyhow!("{}", e))?;
+    paths
+        .ensure_dirs_exist()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     info!("Répertoire de données: {:?}", paths.data_dir);
 
@@ -141,7 +140,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Attendre que les jobs actifs se terminent (timeout 30s)
     info!("Attente de la fin des jobs actifs...");
-    queue_manager.wait_active_jobs(Duration::from_secs(30)).await;
+    queue_manager
+        .wait_active_jobs(Duration::from_secs(30))
+        .await;
 
     // Sauvegarder l'état final
     info!("Sauvegarde de l'état final...");

@@ -1,9 +1,6 @@
-use ratatui::{
-    prelude::*,
-    widgets::*,
-};
 use crate::app::AppState;
 use encodetalker_common::JobStatus;
+use ratatui::{prelude::*, widgets::*};
 
 /// Rendre la vue des jobs actifs
 pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -25,9 +22,11 @@ pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
-            state.active_jobs.iter()
+            state
+                .active_jobs
+                .iter()
                 .map(|_| Constraint::Length(8))
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
         )
         .split(area);
 
@@ -39,8 +38,15 @@ pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Rendre un job actif individuel
-fn render_active_job(frame: &mut Frame, area: Rect, job: &encodetalker_common::EncodingJob, selected: bool) {
-    let filename = job.input_path.file_name()
+fn render_active_job(
+    frame: &mut Frame,
+    area: Rect,
+    job: &encodetalker_common::EncodingJob,
+    selected: bool,
+) {
+    let filename = job
+        .input_path
+        .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown");
 
@@ -90,8 +96,7 @@ fn render_active_job(frame: &mut Frame, area: Rect, job: &encodetalker_common::E
             ])
             .split(inner);
 
-        let info = Paragraph::new(info_text)
-            .style(Style::default().fg(Color::White));
+        let info = Paragraph::new(info_text).style(Style::default().fg(Color::White));
         frame.render_widget(info, info_chunks[1]);
 
         frame.render_widget(gauge, info_chunks[2]);
@@ -121,9 +126,13 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     // Créer les items de la liste
-    let items: Vec<ListItem> = state.history_jobs.iter()
+    let items: Vec<ListItem> = state
+        .history_jobs
+        .iter()
         .map(|job| {
-            let filename = job.input_path.file_name()
+            let filename = job
+                .input_path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
 
@@ -155,8 +164,7 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
                 status_icon, filename, duration_text, error_text
             );
 
-            ListItem::new(text)
-                .style(Style::default().fg(status_color))
+            ListItem::new(text).style(Style::default().fg(status_color))
         })
         .collect();
 
@@ -165,7 +173,7 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
         .highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
 
