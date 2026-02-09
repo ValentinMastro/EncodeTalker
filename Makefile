@@ -76,6 +76,8 @@ clean-all: clean
 		echo "   Suppression de $(DATA_DIR)/"; \
 		rm -rf "$(DATA_DIR)"; \
 	fi
+	@echo "🧹 Suppression des fichiers .log..."
+	@find . -name "*.log" -type f -delete 2>/dev/null || true
 	@echo "🧹 Arrêt du daemon si en cours..."
 	@pkill encodetalker-daemon 2>/dev/null || true
 	@echo "✅ Nettoyage complet terminé"
