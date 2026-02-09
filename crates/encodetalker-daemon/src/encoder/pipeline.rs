@@ -104,7 +104,7 @@ impl EncodingPipeline {
             .arg("-f")
             .arg("yuv4mpegpipe")
             .arg("-pix_fmt")
-            .arg("yuv420p")
+            .arg("yuv420p10le")
             .arg("-strict")
             .arg("-1")
             .arg("-")
