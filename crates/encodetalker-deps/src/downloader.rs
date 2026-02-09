@@ -15,6 +15,11 @@ impl Downloader {
         Self { src_dir }
     }
 
+    /// Obtenir le répertoire des sources
+    pub fn src_dir(&self) -> &Path {
+        &self.src_dir
+    }
+
     /// Télécharger une archive tar.xz
     pub async fn download_tarball(&self, url: &str, output_name: &str) -> Result<PathBuf> {
         let output_path = self.src_dir.join(output_name);

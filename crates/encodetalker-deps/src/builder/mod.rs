@@ -1,11 +1,9 @@
 pub mod aom;
 pub mod ffmpeg;
-pub mod mkvtoolnix;
 pub mod svt_av1;
 
 pub use aom::*;
 pub use ffmpeg::*;
-pub use mkvtoolnix::*;
 pub use svt_av1::*;
 
 use crate::Result;

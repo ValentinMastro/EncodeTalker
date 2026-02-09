@@ -47,7 +47,7 @@ impl DependencyBuilder for AomBuilder {
                 "-DCMAKE_BUILD_TYPE=Release",
                 "-DENABLE_DOCS=0",
                 "-DENABLE_TESTS=0",
-                "-DENABLE_EXAMPLES=0",
+                "-DENABLE_EXAMPLES=1", // Nécessaire pour compiler aomenc
             ])
             .output()
             .await?;

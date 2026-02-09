@@ -50,14 +50,12 @@ impl DependencyDetector {
         let ffprobe = self.check_dependency("ffprobe");
         let svt_av1 = self.check_dependency("SvtAv1EncApp");
         let aomenc = self.check_dependency("aomenc");
-        let mkvmerge = self.check_dependency("mkvmerge");
 
         DependencyStatus {
             ffmpeg,
             ffprobe,
             svt_av1,
             aomenc,
-            mkvmerge,
         }
     }
 
@@ -98,12 +96,11 @@ pub struct DependencyStatus {
     pub ffprobe: bool,
     pub svt_av1: bool,
     pub aomenc: bool,
-    pub mkvmerge: bool,
 }
 
 impl DependencyStatus {
     pub fn all_present(&self) -> bool {
-        self.ffmpeg && self.ffprobe && self.svt_av1 && self.aomenc && self.mkvmerge
+        self.ffmpeg && self.ffprobe && self.svt_av1 && self.aomenc
     }
 
     pub fn missing(&self) -> Vec<&str> {
@@ -119,9 +116,6 @@ impl DependencyStatus {
         }
         if !self.aomenc {
             missing.push("aomenc");
-        }
-        if !self.mkvmerge {
-            missing.push("mkvmerge");
         }
         missing
     }

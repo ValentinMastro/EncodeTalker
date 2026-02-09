@@ -1,6 +1,6 @@
 use crate::{
-    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
-    MkvtoolnixBuilder, Result, SvtAv1Builder,
+    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError,
+    FFmpegBuilder, Result, SvtAv1Builder,
 };
 use encodetalker_common::AppPaths;
 use std::path::PathBuf;
@@ -59,10 +59,6 @@ impl DependencyManager {
             self.ensure_aom().await?;
         }
 
-        if !status.mkvmerge {
-            self.ensure_mkvtoolnix().await?;
-        }
-
         // Vérification finale
         let final_status = self.check_status();
         if !final_status.all_present() {
@@ -92,12 +88,6 @@ impl DependencyManager {
     async fn ensure_aom(&self) -> Result<()> {
         info!("=== Installation de libaom ===");
         let builder = AomBuilder::new(self.paths.deps_src_dir.clone());
-        self.build_dependency(&builder).await
-    }
-
-    async fn ensure_mkvtoolnix(&self) -> Result<()> {
-        info!("=== Installation de mkvtoolnix ===");
-        let builder = MkvtoolnixBuilder::new(self.paths.deps_src_dir.clone());
         self.build_dependency(&builder).await
     }
 

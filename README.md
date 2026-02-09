@@ -7,7 +7,7 @@ Un wrapper Rust autour de ffmpeg avec interface TUI pour gérer l'encodage vidé
 - **Architecture client-serveur** : Le daemon gère l'encodage en arrière-plan, le TUI est reconnectable
 - **Persistance** : Les jobs d'encodage continuent même si vous fermez le TUI
 - **Queue intelligente** : Gestion automatique de la queue avec concurrence configurable
-- **Compilation automatique des dépendances** : ffmpeg, SVT-AV1-psy, libaom, mkvtoolnix
+- **Compilation automatique des dépendances** : ffmpeg, SVT-AV1-psy, libaom
 - **Suivi temps réel** : Progression, FPS, ETA pour chaque encodage
 - **Pipeline flexible** : Support SVT-AV1 et libaom, audio Opus ou copy, sous-titres
 
@@ -34,12 +34,12 @@ EncodeTalker/
 ### ✅ Phase 2 : Gestion des dépendances (Complète)
 - Détection automatique des binaires
 - Téléchargement des sources
-- Compilation de ffmpeg, SVT-AV1-psy, libaom, mkvtoolnix
+- Compilation de ffmpeg, SVT-AV1-psy, libaom
 - Installation dans `~/.local/share/encodetalker/deps/`
 
 ### ✅ Phase 3 : Daemon (Complète)
 - Queue manager avec concurrence configurable
-- Pipeline d'encodage (ffmpeg → encodeur → mkvmerge)
+- Pipeline d'encodage (ffmpeg → encodeur → ffmpeg muxing)
 - Parser de stats ffmpeg en temps réel
 - Serveur IPC Unix socket avec broadcast d'événements
 - Persistance de l'état (JSON)
@@ -117,15 +117,29 @@ Le daemon va :
 
 ### Dépendances système requises
 
-Pour compiler les dépendances, vous devez avoir :
+Pour compiler les dépendances (ffmpeg, SVT-AV1, libaom), vous devez installer :
 
 ```bash
 # Sur Arch Linux / Manjaro
-sudo pacman -S base-devel cmake git nasm ruby
+sudo pacman -S base-devel cmake git nasm
 
-# Les dépendances suivantes peuvent également être nécessaires
-sudo pacman -S libopus libvpx
+# Sur Ubuntu / Debian
+sudo apt install build-essential cmake git nasm
+
+# Sur Fedora
+sudo dnf install @development-tools cmake git nasm
 ```
+
+**Note** : Toutes les dépendances sont compilées localement sans nécessiter d'accès sudo ! 🎉
+
+⏱️ **Temps de compilation estimé** :
+- FFmpeg : 15-20 min
+- SVT-AV1 : 10-15 min
+- libaom : 15-20 min
+
+**Total : ~40-55 minutes la première fois**
+
+**Muxing** : ffmpeg est utilisé pour créer les fichiers MKV finaux (pas besoin de mkvtoolnix)
 
 ## Configuration
 
@@ -160,7 +174,7 @@ refresh_interval_ms = 500
 ## Fichiers créés
 
 - `~/.local/share/encodetalker/` : Répertoire de données
-  - `deps/bin/` : Binaires compilés (ffmpeg, SvtAv1EncApp, aomenc, mkvmerge)
+  - `deps/bin/` : Binaires compilés (ffmpeg, ffprobe, SvtAv1EncApp, aomenc)
   - `deps/src/` : Sources téléchargées
   - `state.json` : État persisté (queue, active jobs, history)
   - `daemon.sock` : Socket Unix pour IPC
@@ -189,7 +203,7 @@ fichier.mp4
         audio.opus (ou copy)
 
 Ensuite:
-    mkvmerge (mux vidéo.ivf + audio.opus + subtitles) → fichier.mkv
+    ffmpeg (mux vidéo.ivf + audio.opus + subtitles) → fichier.mkv
 ```
 
 ### Protocole IPC

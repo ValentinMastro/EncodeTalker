@@ -14,7 +14,6 @@ pub struct EncodingPipeline {
     ffprobe_bin: PathBuf,
     svt_av1_bin: PathBuf,
     aom_bin: PathBuf,
-    mkvmerge_bin: PathBuf,
 }
 
 impl EncodingPipeline {
@@ -23,14 +22,12 @@ impl EncodingPipeline {
         ffprobe_bin: PathBuf,
         svt_av1_bin: PathBuf,
         aom_bin: PathBuf,
-        mkvmerge_bin: PathBuf,
     ) -> Self {
         Self {
             ffmpeg_bin,
             ffprobe_bin,
             svt_av1_bin,
             aom_bin,
-            mkvmerge_bin,
         }
     }
 
@@ -311,32 +308,52 @@ impl EncodingPipeline {
         audio_path: &Path,
         video_info: &VideoInfo,
     ) -> Result<()> {
-        info!("Muxage final avec mkvmerge");
+        info!("Muxage final avec ffmpeg");
 
-        let mut cmd = Command::new(&self.mkvmerge_bin);
+        let mut cmd = Command::new(&self.ffmpeg_bin);
 
-        cmd.arg("-o")
-            .arg(&job.output_path)
-            .arg(video_path)
-            .arg(audio_path);
+        cmd.arg("-y") // Écraser sans demander
+            .arg("-i")
+            .arg(video_path) // Vidéo AV1
+            .arg("-i")
+            .arg(audio_path); // Audio
 
-        // Ajouter les sous-titres depuis la source
+        // Mapper vidéo et audio
+        cmd.arg("-map").arg("0:v:0") // Vidéo du premier input
+            .arg("-map")
+            .arg("1:a:0"); // Audio du deuxième input
+
+        // Ajouter les sous-titres depuis la source si demandé
         if !video_info.subtitle_streams.is_empty() {
+            cmd.arg("-i").arg(&job.input_path); // Input source pour sous-titres
+
             if let Some(streams) = &job.config.subtitle_streams {
                 for stream_idx in streams {
-                    cmd.arg("--subtitle-tracks").arg(stream_idx.to_string());
+                    cmd.arg("-map").arg(format!("2:s:{}", stream_idx));
                 }
+            } else {
+                // Par défaut, copier tous les sous-titres
+                cmd.arg("-map").arg("2:s?");
             }
-            cmd.arg(&job.input_path);
+
+            // Copier les sous-titres sans réencodage
+            cmd.arg("-c:s").arg("copy");
         }
+
+        // Copier les streams sans réencodage
+        cmd.arg("-c:v").arg("copy").arg("-c:a").arg("copy");
+
+        // Output MKV
+        cmd.arg(&job.output_path);
 
         let output = cmd.output().await.context("Échec du muxage")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Muxage échoué: {}", stderr);
+            anyhow::bail!("Muxage ffmpeg échoué: {}", stderr);
         }
 
+        info!("Muxage réussi");
         Ok(())
     }
 }

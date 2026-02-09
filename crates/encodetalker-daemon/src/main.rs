@@ -41,39 +41,21 @@ async fn main() -> anyhow::Result<()> {
         std::fs::remove_file(&paths.socket_path)?;
     }
 
-    // Bind le socket maintenant (mais on démarrera le serveur plus tard)
+    // Bind le socket maintenant
     let listener = tokio::net::UnixListener::bind(&paths.socket_path)?;
     info!("Socket créé sur {:?}", paths.socket_path);
 
-    // Maintenant compiler les dépendances (le socket existe déjà, donc le TUI peut tenter de se connecter)
+    // Vérifier les dépendances
     info!("Vérification des dépendances...");
     let dep_manager = DependencyManager::new(paths.clone());
     let status = dep_manager.check_status();
 
-    if !status.all_present() {
-        info!("Dépendances manquantes: {:?}", status.missing());
-        info!("Compilation des dépendances (cela peut prendre 30-60 minutes)...");
-        info!("Le serveur IPC sera disponible une fois la compilation terminée");
-
-        if let Err(e) = dep_manager.ensure_all_deps().await {
-            error!("Échec de la compilation des dépendances: {}", e);
-            error!("Veuillez installer les dépendances système requises:");
-            error!("  sudo pacman -S base-devel cmake git nasm ruby");
-            // Nettoyer le socket avant de quitter
-            let _ = std::fs::remove_file(&paths.socket_path);
-            return Err(anyhow::anyhow!("{}", e));
-        }
-    }
-
-    info!("Toutes les dépendances sont présentes");
-
-    // Créer le pipeline d'encodage
+    // Créer le pipeline d'encodage (même si les binaires n'existent pas encore)
     let pipeline = EncodingPipeline::new(
         dep_manager.get_binary_path("ffmpeg"),
         dep_manager.get_binary_path("ffprobe"),
         dep_manager.get_binary_path("SvtAv1EncApp"),
         dep_manager.get_binary_path("aomenc"),
-        dep_manager.get_binary_path("mkvmerge"),
     );
 
     // Créer la persistance
@@ -123,7 +105,32 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    info!("Daemon démarré, en attente de connexions...");
+    info!("Daemon démarré, serveur IPC en cours d'exécution");
+
+    // Compiler les dépendances EN ARRIÈRE-PLAN si nécessaire
+    if !status.all_present() {
+        info!("Dépendances manquantes: {:?}", status.missing());
+        info!("Compilation des dépendances en arrière-plan (30-60 minutes)...");
+
+        let paths_clone = paths.clone();
+        tokio::spawn(async move {
+            let dep_mgr = DependencyManager::new(paths_clone.clone());
+            match dep_mgr.ensure_all_deps().await {
+                Ok(()) => {
+                    info!("✅ Toutes les dépendances sont maintenant compilées et prêtes");
+                    info!("Vous pouvez maintenant ajouter des jobs d'encodage");
+                }
+                Err(e) => {
+                    error!("❌ Échec de la compilation des dépendances: {}", e);
+                    error!("Veuillez installer les dépendances système requises:");
+                    error!("  sudo pacman -S base-devel cmake git nasm ruby libopus libvpx");
+                    error!("Le daemon continue de fonctionner mais ne pourra pas encoder");
+                }
+            }
+        });
+    } else {
+        info!("✅ Toutes les dépendances sont présentes");
+    }
 
     // Attendre le signal de shutdown
     tokio::select! {
