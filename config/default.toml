@@ -8,6 +8,9 @@ default_encoder = "svt-av1"
 default_audio_mode = "opus"
 default_audio_bitrate = 128
 output_suffix = ".av1"
+# Comptage précis des frames via ffmpeg (lent mais exact, utile pour vidéos VFR)
+# false = estimation rapide (durée × fps), true = comptage précis
+precise_frame_count = true
 
 [encoder.svt-av1]
 preset = 6

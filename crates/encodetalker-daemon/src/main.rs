@@ -56,6 +56,7 @@ async fn main() -> anyhow::Result<()> {
         dep_manager.get_binary_path("ffprobe"),
         dep_manager.get_binary_path("SvtAv1EncApp"),
         dep_manager.get_binary_path("aomenc"),
+        config.encoding.precise_frame_count,
     );
 
     // Créer la persistance

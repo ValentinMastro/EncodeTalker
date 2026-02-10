@@ -24,6 +24,9 @@ pub struct EncodingSettings {
     pub default_audio_mode: String,
     pub default_audio_bitrate: u32,
     pub output_suffix: String,
+    /// Activer le comptage précis des frames (lent mais exact)
+    #[serde(default)]
+    pub precise_frame_count: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +69,7 @@ impl Default for DaemonConfig {
                 default_audio_mode: "opus".to_string(),
                 default_audio_bitrate: 128,
                 output_suffix: ".av1".to_string(),
+                precise_frame_count: false,
             },
             encoder: EncoderSettings {
                 svt_av1: SvtAv1Settings {
