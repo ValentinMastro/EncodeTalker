@@ -19,3 +19,25 @@ Thumbs.db
 /deps/
 *.log
 state.json
+
+# Conteneurs
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.webm
+
+# Flux vidéos
+*.ivf
+
+# Flux audio
+*.mka
+*.mp3
+*.wav
+*.flac
+
+# Sous-titres
+*.srt
+*.ass
+*.ssa
+*.vtt
