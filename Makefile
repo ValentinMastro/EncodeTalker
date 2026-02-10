@@ -1,7 +1,7 @@
 # Makefile pour EncodeTalker
 # Facilite la compilation, le nettoyage et le lancement du projet
 
-.PHONY: all build build-dev test clean clean-all fmt clippy run-daemon run-tui install help
+.PHONY: all build build-dev test test-unit test-integration clean clean-all fmt clippy run-daemon run-tui stop install help
 
 # Variables
 CARGO := cargo
@@ -18,7 +18,9 @@ help:
 	@echo ""
 	@echo "  make build       - Compiler en mode release"
 	@echo "  make build-dev   - Compiler en mode développement"
-	@echo "  make test        - Lancer les tests"
+	@echo "  make test        - Lancer tous les tests"
+	@echo "  make test-unit   - Lancer les tests unitaires (rapides)"
+	@echo "  make test-integration - Lancer les tests d'intégration (nécessite vidéo)"
 	@echo "  make clean       - Nettoyer le build Cargo + dépendances compilées"
 	@echo "  make clean-all   - Nettoyer tout (build + dépendances + socket)"
 	@echo "  make fmt         - Formatter le code"
@@ -26,6 +28,7 @@ help:
 	@echo "  make check       - Vérifier (fmt + clippy + test)"
 	@echo "  make run-daemon  - Lancer le daemon avec logs"
 	@echo "  make run-tui     - Lancer le TUI"
+	@echo "  make stop        - Arrêter le daemon"
 	@echo "  make install     - Installer les binaires dans ~/.local/bin"
 	@echo "  make uninstall   - Désinstaller les binaires"
 	@echo "  make help        - Afficher cette aide"
@@ -44,6 +47,20 @@ build-dev:
 test:
 	@echo "🧪 Lancement des tests..."
 	$(CARGO) test --all
+
+# Tests unitaires (rapides)
+test-unit:
+	@echo "🧪 Tests unitaires..."
+	$(CARGO) test --all --lib
+
+# Tests d'intégration (nécessite vidéo test)
+test-integration:
+	@echo "🧪 Lancement des tests d'intégration..."
+	@if [ ! -f "vidéos_de_test/test1.mkv" ]; then \
+		echo "❌ Vidéo de test manquante: vidéos_de_test/test1.mkv"; \
+		exit 1; \
+	fi
+	RUST_LOG=info $(CARGO) test -p encodetalker-daemon --test integration_tests -- --ignored --nocapture
 
 # Formatage et linting
 fmt:
@@ -79,7 +96,7 @@ clean-all: clean
 	@echo "🧹 Suppression des fichiers .log..."
 	@find . -name "*.log" -type f -delete 2>/dev/null || true
 	@echo "🧹 Arrêt du daemon si en cours..."
-	@pkill -f encodetalker-daemon 2>/dev/null || true
+	@pgrep -f "encodetalker-daemon$$" | xargs -r kill 2>/dev/null || true
 	@echo "✅ Nettoyage complet terminé"
 
 # Lancement
@@ -95,6 +112,11 @@ run-daemon:
 run-tui:
 	@echo "🖥️  Lancement du TUI..."
 	./target/release/encodetalker-tui
+
+stop:
+	@echo "🛑 Arrêt du daemon..."
+	@pgrep -f "target/release/encodetalker-daemon$$" | xargs -r kill 2>/dev/null || true
+	@echo "✅ Daemon arrêté (s'il était actif)"
 
 # Installation
 install: build
