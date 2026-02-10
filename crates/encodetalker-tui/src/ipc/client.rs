@@ -12,8 +12,8 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use encodetalker_common::{
-    EncodingConfig, EncodingJob, Event, IpcMessage, Request, RequestPayload,
-    Response, ResponsePayload,
+    EncodingConfig, EncodingJob, Event, IpcMessage, Request, RequestPayload, Response,
+    ResponsePayload,
 };
 
 /// Client IPC pour communiquer avec le daemon
@@ -74,7 +74,10 @@ impl IpcClient {
                             let _ = tx.send(response);
                         } else {
                             // Réponse non attendue, on l'ignore
-                            debug!("Réponse non attendue pour request_id: {}", response.request_id);
+                            debug!(
+                                "Réponse non attendue pour request_id: {}",
+                                response.request_id
+                            );
                         }
                     }
                     Ok(IpcMessage::Event(event)) => {

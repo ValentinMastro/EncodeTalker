@@ -8,14 +8,12 @@ use tokio::io::AsyncWriteExt;
 use tracing::info;
 
 /// État persisté du daemon
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PersistedState {
     pub queue: VecDeque<EncodingJob>,
     pub active: Vec<EncodingJob>,
     pub history: Vec<EncodingJob>,
 }
-
 
 /// Gestionnaire de persistance
 pub struct Persistence {

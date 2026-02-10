@@ -1,6 +1,6 @@
 use crate::{
-    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError,
-    FFmpegBuilder, Result, SvtAv1Builder,
+    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
+    Result, SvtAv1Builder,
 };
 use encodetalker_common::AppPaths;
 use std::path::PathBuf;

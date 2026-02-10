@@ -251,6 +251,9 @@ pub enum ConfirmAction {
 pub struct EncodeConfigDialog {
     pub input_path: PathBuf,
     pub output_path: PathBuf,
+    pub output_path_string: String,
+    pub output_path_cursor: usize,
+    pub is_editing_output: bool,
     pub config: EncodingConfig,
     pub selected_field: usize,
 }
@@ -261,10 +264,14 @@ impl EncodeConfigDialog {
         let mut output_path = input_path.clone();
         output_path.set_extension("");
         let output_path = PathBuf::from(format!("{}.av1.mkv", output_path.display()));
+        let output_path_string = output_path.display().to_string();
 
         Self {
             input_path,
             output_path,
+            output_path_string,
+            output_path_cursor: 0,
+            is_editing_output: false,
             config: EncodingConfig::default(),
             selected_field: 0,
         }
@@ -281,5 +288,19 @@ impl EncodeConfigDialog {
         if self.selected_field < 4 {
             self.selected_field += 1;
         }
+    }
+
+    pub fn start_editing_output(&mut self) {
+        self.is_editing_output = true;
+        self.output_path_cursor = self.output_path_string.chars().count();
+    }
+
+    pub fn stop_editing_output(&mut self) {
+        self.is_editing_output = false;
+        self.sync_output_path();
+    }
+
+    pub fn sync_output_path(&mut self) {
+        self.output_path = PathBuf::from(&self.output_path_string);
     }
 }

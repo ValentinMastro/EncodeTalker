@@ -79,15 +79,15 @@ clean-all: clean
 	@echo "🧹 Suppression des fichiers .log..."
 	@find . -name "*.log" -type f -delete 2>/dev/null || true
 	@echo "🧹 Arrêt du daemon si en cours..."
-	@pkill encodetalker-daemon 2>/dev/null || true
+	@pkill -f encodetalker-daemon 2>/dev/null || true
 	@echo "✅ Nettoyage complet terminé"
 
 # Lancement
 run-daemon:
 	@echo "🚀 Lancement du daemon..."
-	@if pgrep -x encodetalker-daemon > /dev/null; then \
+	@if pgrep -f encodetalker-daemon > /dev/null; then \
 		echo "⚠️  Le daemon est déjà en cours d'exécution"; \
-		echo "   Arrêtez-le avec: pkill encodetalker-daemon"; \
+		echo "   Arrêtez-le avec: pkill -f encodetalker-daemon"; \
 		exit 1; \
 	fi
 	RUST_LOG=info ./target/release/encodetalker-daemon
@@ -132,7 +132,7 @@ info:
 	fi
 	@echo ""
 	@echo "Processus daemon:"
-	@pgrep -l encodetalker-daemon || echo "  Non actif"
+	@pgrep -f -l encodetalker-daemon || echo "  Non actif"
 	@echo ""
 	@echo "Socket:"
 	@if [ -S "$(DATA_DIR)/daemon.sock" ]; then \

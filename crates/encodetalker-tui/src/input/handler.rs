@@ -203,9 +203,78 @@ fn handle_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
     }
 }
 
+/// Gérer l'édition du chemin de sortie
+fn handle_output_path_editing(config: &mut EncodeConfigDialog, key: KeyEvent) -> InputAction {
+    match key.code {
+        KeyCode::Esc => {
+            // Annuler et restaurer
+            config.output_path_string = config.output_path.display().to_string();
+            config.is_editing_output = false;
+            InputAction::None
+        }
+        KeyCode::Enter => {
+            config.stop_editing_output();
+            InputAction::None
+        }
+        KeyCode::Left => {
+            if config.output_path_cursor > 0 {
+                config.output_path_cursor -= 1;
+            }
+            InputAction::None
+        }
+        KeyCode::Right => {
+            let char_count = config.output_path_string.chars().count();
+            if config.output_path_cursor < char_count {
+                config.output_path_cursor += 1;
+            }
+            InputAction::None
+        }
+        KeyCode::Home => {
+            config.output_path_cursor = 0;
+            InputAction::None
+        }
+        KeyCode::End => {
+            config.output_path_cursor = config.output_path_string.chars().count();
+            InputAction::None
+        }
+        KeyCode::Backspace => {
+            if config.output_path_cursor > 0 {
+                let mut chars: Vec<char> = config.output_path_string.chars().collect();
+                if config.output_path_cursor <= chars.len() {
+                    chars.remove(config.output_path_cursor - 1);
+                    config.output_path_string = chars.into_iter().collect();
+                    config.output_path_cursor -= 1;
+                }
+            }
+            InputAction::None
+        }
+        KeyCode::Delete => {
+            let mut chars: Vec<char> = config.output_path_string.chars().collect();
+            if config.output_path_cursor < chars.len() {
+                chars.remove(config.output_path_cursor);
+                config.output_path_string = chars.into_iter().collect();
+            }
+            InputAction::None
+        }
+        KeyCode::Char(c) => {
+            let mut chars: Vec<char> = config.output_path_string.chars().collect();
+            chars.insert(config.output_path_cursor, c);
+            config.output_path_string = chars.into_iter().collect();
+            config.output_path_cursor += 1;
+            InputAction::None
+        }
+        _ => InputAction::None,
+    }
+}
+
 /// Gérer les touches dans le dialogue de config d'encodage
 fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
     if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
+        // Si en mode édition du chemin
+        if config.is_editing_output {
+            return handle_output_path_editing(config, key);
+        }
+
         match key.code {
             KeyCode::Esc => {
                 state.dialog = None;
@@ -220,11 +289,21 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Left | KeyCode::Right => {
-                // Changer la valeur du champ sélectionné
-                toggle_field_value(config, key.code == KeyCode::Right);
+                // Si sur field 4 et →, activer l'édition
+                if config.selected_field == 4 && key.code == KeyCode::Right {
+                    config.start_editing_output();
+                } else {
+                    toggle_field_value(config, key.code == KeyCode::Right);
+                }
                 return InputAction::None;
             }
             KeyCode::Enter => {
+                // Si sur field 4, activer l'édition
+                if config.selected_field == 4 {
+                    config.start_editing_output();
+                    return InputAction::None;
+                }
+
                 // Valider et ajouter le job
                 let input_path = config.input_path.clone();
                 let output_path = config.output_path.clone();
@@ -283,6 +362,9 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             } else if !increment && config.config.encoder_params.preset > 0 {
                 config.config.encoder_params.preset -= 1;
             }
+        }
+        4 => {
+            // Output path : géré par le mode édition, ne rien faire ici
         }
         _ => {}
     }

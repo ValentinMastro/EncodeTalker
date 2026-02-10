@@ -175,10 +175,10 @@ Le daemon tourne en arrière-plan. Vous pouvez :
 
 # Le daemon continue en arrière-plan
 # Pour l'arrêter :
-pkill encodetalker-daemon
+pkill -f encodetalker-daemon
 
 # Ou envoyer SIGTERM
-kill $(pgrep encodetalker-daemon)
+kill $(pgrep -f encodetalker-daemon)
 ```
 
 ## Support

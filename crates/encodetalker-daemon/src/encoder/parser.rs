@@ -26,43 +26,89 @@ impl StatsParser {
 
     /// Parser une ligne de sortie ffmpeg
     pub fn parse_line(&mut self, line: &str) {
-        // Parse frame
-        if let Some(caps) = FRAME_REGEX.captures(line) {
-            if let Ok(frame) = caps[1].parse::<u64>() {
-                self.stats.frame = frame;
+        // Format -progress : key=value sur des lignes séparées
+        if let Some((key, value)) = line.split_once('=') {
+            match key {
+                "frame" => {
+                    if let Ok(frame) = value.parse::<u64>() {
+                        self.stats.frame = frame;
+                    }
+                }
+                "fps" => {
+                    if let Ok(fps) = value.parse::<f64>() {
+                        self.stats.fps = fps;
+                    }
+                }
+                "bitrate" => {
+                    // Format: "1234.5kbits/s"
+                    let bitrate_str = value.trim_end_matches("kbits/s");
+                    if let Ok(bitrate) = bitrate_str.parse::<f64>() {
+                        self.stats.bitrate = bitrate;
+                    }
+                }
+                "out_time" => {
+                    // Format: "00:00:05.000000"
+                    if let Some(caps) = TIME_REGEX.captures(value) {
+                        if let (Ok(hours), Ok(mins), Ok(secs), Ok(centis)) = (
+                            caps[1].parse::<u64>(),
+                            caps[2].parse::<u64>(),
+                            caps[3].parse::<u64>(),
+                            caps[4].parse::<u64>(),
+                        ) {
+                            let total_secs = hours * 3600 + mins * 60 + secs;
+                            let total_millis = total_secs * 1000 + centis * 10;
+                            self.stats.time_encoded = Duration::from_millis(total_millis);
+                        }
+                    }
+                }
+                "progress" => {
+                    // Recalculer progression et ETA quand on reçoit progress=continue
+                    if value == "continue" || value == "end" {
+                        self.stats.update();
+                    }
+                }
+                _ => {}
             }
-        }
-
-        // Parse fps
-        if let Some(caps) = FPS_REGEX.captures(line) {
-            if let Ok(fps) = caps[1].parse::<f64>() {
-                self.stats.fps = fps;
+        } else {
+            // Fallback : format classique pour compatibilité
+            // Parse frame
+            if let Some(caps) = FRAME_REGEX.captures(line) {
+                if let Ok(frame) = caps[1].parse::<u64>() {
+                    self.stats.frame = frame;
+                }
             }
-        }
 
-        // Parse bitrate
-        if let Some(caps) = BITRATE_REGEX.captures(line) {
-            if let Ok(bitrate) = caps[1].parse::<f64>() {
-                self.stats.bitrate = bitrate;
+            // Parse fps
+            if let Some(caps) = FPS_REGEX.captures(line) {
+                if let Ok(fps) = caps[1].parse::<f64>() {
+                    self.stats.fps = fps;
+                }
             }
-        }
 
-        // Parse time (format: 00:00:49.40)
-        if let Some(caps) = TIME_REGEX.captures(line) {
-            if let (Ok(hours), Ok(mins), Ok(secs), Ok(centis)) = (
-                caps[1].parse::<u64>(),
-                caps[2].parse::<u64>(),
-                caps[3].parse::<u64>(),
-                caps[4].parse::<u64>(),
-            ) {
-                let total_secs = hours * 3600 + mins * 60 + secs;
-                let total_millis = total_secs * 1000 + centis * 10;
-                self.stats.time_encoded = Duration::from_millis(total_millis);
+            // Parse bitrate
+            if let Some(caps) = BITRATE_REGEX.captures(line) {
+                if let Ok(bitrate) = caps[1].parse::<f64>() {
+                    self.stats.bitrate = bitrate;
+                }
             }
-        }
 
-        // Recalculer progression et ETA
-        self.stats.update();
+            // Parse time (format: 00:00:49.40)
+            if let Some(caps) = TIME_REGEX.captures(line) {
+                if let (Ok(hours), Ok(mins), Ok(secs), Ok(centis)) = (
+                    caps[1].parse::<u64>(),
+                    caps[2].parse::<u64>(),
+                    caps[3].parse::<u64>(),
+                    caps[4].parse::<u64>(),
+                ) {
+                    let total_secs = hours * 3600 + mins * 60 + secs;
+                    let total_millis = total_secs * 1000 + centis * 10;
+                    self.stats.time_encoded = Duration::from_millis(total_millis);
+                }
+            }
+
+            // Recalculer progression et ETA
+            self.stats.update();
+        }
     }
 
     /// Obtenir les stats actuelles

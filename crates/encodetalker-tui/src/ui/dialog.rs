@@ -53,9 +53,34 @@ fn render_encode_config_dialog(
     let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
     frame.render_widget(input, chunks[0]);
 
-    // Output file
-    let output_text = format!("Output: {}", config.output_path.display());
-    let output = Paragraph::new(output_text).style(Style::default().fg(Color::White));
+    // Output file (éditable)
+    let output_style = if config.selected_field == 4 {
+        if config.is_editing_output {
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        }
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let output_text = if config.is_editing_output {
+        // Mode édition : afficher avec curseur (utiliser chars() pour gérer UTF-8)
+        let chars: Vec<char> = config.output_path_string.chars().collect();
+        let before: String = chars[..config.output_path_cursor].iter().collect();
+        let after: String = chars[config.output_path_cursor..].iter().collect();
+        format!("Output: {}█{}", before, after)
+    } else if config.selected_field == 4 {
+        format!("Output: {} [→ to edit]", config.output_path_string)
+    } else {
+        format!("Output: {}", config.output_path_string)
+    };
+
+    let output = Paragraph::new(output_text).style(output_style);
     frame.render_widget(output, chunks[1]);
 
     // Encoder
@@ -125,10 +150,14 @@ fn render_encode_config_dialog(
     frame.render_widget(preset, chunks[5]);
 
     // Instructions
-    let instructions =
-        Paragraph::new("↑↓: Navigate | ←→: Change value | Enter: Add to queue | ESC: Cancel")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
+    let instructions_text = if config.is_editing_output {
+        "←→: Move cursor | Char: Insert | Backspace/Del: Delete | Enter: Done | ESC: Cancel"
+    } else {
+        "↑↓: Navigate | ←→: Change value | Enter: Add to queue | ESC: Cancel"
+    };
+    let instructions = Paragraph::new(instructions_text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[6]);
 }
 

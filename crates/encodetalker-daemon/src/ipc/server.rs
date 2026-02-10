@@ -118,8 +118,7 @@ impl IpcServer {
         let length_framed = tokio_util::codec::Framed::new(stream, LengthDelimitedCodec::new());
 
         // Wrap avec tokio-serde pour bincode
-        let framed =
-            SerdeFramed::new(length_framed, Bincode::<IpcMessage, IpcMessage>::default());
+        let framed = SerdeFramed::new(length_framed, Bincode::<IpcMessage, IpcMessage>::default());
 
         // Split pour lecture et écriture
         let (mut writer, mut reader) = framed.split();

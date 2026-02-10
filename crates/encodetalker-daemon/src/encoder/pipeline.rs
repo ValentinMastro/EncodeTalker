@@ -99,6 +99,9 @@ impl EncodingPipeline {
 
         // Construire la commande ffmpeg (demux + raw video)
         let mut ffmpeg = Command::new(&self.ffmpeg_bin)
+            .arg("-progress")
+            .arg("pipe:2")
+            .arg("-nostats")
             .arg("-i")
             .arg(&job.input_path)
             .arg("-f")
@@ -319,7 +322,8 @@ impl EncodingPipeline {
             .arg(audio_path); // Audio
 
         // Mapper vidéo et audio
-        cmd.arg("-map").arg("0:v:0") // Vidéo du premier input
+        cmd.arg("-map")
+            .arg("0:v:0") // Vidéo du premier input
             .arg("-map")
             .arg("1:a:0"); // Audio du deuxième input
 

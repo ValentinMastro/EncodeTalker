@@ -226,7 +226,7 @@ ls -la ~/.local/share/encodetalker/daemon.sock
 ps aux | grep encodetalker-daemon
 
 # Tuer le daemon
-pkill encodetalker-daemon
+pkill -f encodetalker-daemon
 
 # Nettoyer le socket
 rm -f ~/.local/share/encodetalker/daemon.sock
