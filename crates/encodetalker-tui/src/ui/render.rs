@@ -37,7 +37,12 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
 
 /// Rendre le header avec les onglets
 fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
-    let titles = vec!["Files", "Queue", "Active", "History"];
+    let titles = vec![
+        "Nouvel encodage",
+        "Queue",
+        "Encodage en cours...",
+        "Historique",
+    ];
     let selected = match state.current_view {
         View::FileBrowser => 0,
         View::Queue => 1,
@@ -67,7 +72,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
             View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Enter: Ouvrir | a: Ajouter | r: Rafraîchir | q: Quitter ",
             View::Queue => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
             View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
-            View::History => " Tab: Vue suivante | ↑↓: Naviguer | r: Retry | C: Clear | q: Quitter ",
+            View::History => " Tab: Vue suivante | ↑↓: Naviguer | r: Réessayer | c: Effacer | C: Tout effacer | q: Quitter ",
         }
     };
 

@@ -31,10 +31,10 @@ impl View {
 
     pub fn title(&self) -> &str {
         match self {
-            View::FileBrowser => "File Browser",
+            View::FileBrowser => "Nouvel encodage",
             View::Queue => "Queue",
-            View::Active => "Active Jobs",
-            View::History => "History",
+            View::Active => "Encodage en cours",
+            View::History => "Historique",
         }
     }
 }
@@ -243,6 +243,7 @@ pub enum Dialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     CancelJob,
+    RemoveFromHistory,
     ClearHistory,
 }
 

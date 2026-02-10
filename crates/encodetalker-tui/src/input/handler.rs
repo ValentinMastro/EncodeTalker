@@ -51,6 +51,9 @@ pub enum InputAction {
     RetryJob {
         job_id: uuid::Uuid,
     },
+    RemoveFromHistory {
+        job_id: uuid::Uuid,
+    },
     ClearHistory,
 }
 
@@ -174,8 +177,18 @@ fn handle_history_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             }
             InputAction::RefreshLists
         }
+        KeyCode::Char('c') => {
+            // Effacer une tâche (minuscule)
+            if state.history_jobs.get(state.selected_index).is_some() {
+                state.dialog = Some(Dialog::Confirm {
+                    message: "Effacer cette tâche de l'historique ?".to_string(),
+                    on_confirm: ConfirmAction::RemoveFromHistory,
+                });
+            }
+            InputAction::None
+        }
         KeyCode::Char('C') => {
-            // Clear history (maj + C)
+            // Effacer tout l'historique (majuscule)
             state.dialog = Some(Dialog::Confirm {
                 message: "Effacer tout l'historique ?".to_string(),
                 on_confirm: ConfirmAction::ClearHistory,
@@ -392,6 +405,11 @@ fn handle_confirm_dialog_key(
 
                     if let Some(job_id) = job_id {
                         return InputAction::CancelJob { job_id };
+                    }
+                }
+                ConfirmAction::RemoveFromHistory => {
+                    if let Some(job) = state.history_jobs.get(state.selected_index) {
+                        return InputAction::RemoveFromHistory { job_id: job.id };
                     }
                 }
                 ConfirmAction::ClearHistory => {

@@ -6,7 +6,10 @@ use ratatui::{prelude::*, widgets::*};
 pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" ⚙️  Active Jobs ({}) ", state.active_jobs.len()))
+        .title(format!(
+            " ⚙️  Encodage en cours ({}) ",
+            state.active_jobs.len()
+        ))
         .border_style(Style::default().fg(Color::Green));
 
     if state.active_jobs.is_empty() {
@@ -113,7 +116,10 @@ fn render_active_job(
 pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" 📜 History ({} jobs) ", state.history_jobs.len()))
+        .title(format!(
+            " 📜 Historique ({} tâches) ",
+            state.history_jobs.len()
+        ))
         .border_style(Style::default().fg(Color::Magenta));
 
     if state.history_jobs.is_empty() {

@@ -44,6 +44,8 @@ pub enum RequestPayload {
     GetJob { job_id: Uuid },
     /// Obtenir les stats actuelles d'un job running
     GetStats { job_id: Uuid },
+    /// Supprimer un job spécifique de l'historique
+    RemoveFromHistory { job_id: Uuid },
     /// Clear l'historique
     ClearHistory,
     /// Shutdown graceful du daemon

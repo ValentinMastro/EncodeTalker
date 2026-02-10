@@ -222,6 +222,13 @@ impl IpcServer {
                 None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
             },
 
+            RequestPayload::RemoveFromHistory { job_id } => {
+                match queue_manager.remove_from_history(job_id).await {
+                    Ok(()) => Response::ok(request_id),
+                    Err(e) => Response::error(request_id, e.to_string()),
+                }
+            }
+
             RequestPayload::ClearHistory => match queue_manager.clear_history().await {
                 Ok(()) => Response::ok(request_id),
                 Err(e) => Response::error(request_id, e.to_string()),

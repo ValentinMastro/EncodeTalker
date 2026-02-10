@@ -191,6 +191,21 @@ impl QueueManager {
         self.history.read().await.clone()
     }
 
+    /// Supprimer un job spécifique de l'historique
+    pub async fn remove_from_history(&self, job_id: Uuid) -> Result<()> {
+        let mut history = self.history.write().await;
+        let initial_len = history.len();
+        history.retain(|job| job.id != job_id);
+        let removed = initial_len - history.len();
+
+        if removed > 0 {
+            info!("Job {} supprimé de l'historique", job_id);
+            Ok(())
+        } else {
+            anyhow::bail!("Job {} non trouvé dans l'historique", job_id)
+        }
+    }
+
     /// Clear l'historique
     pub async fn clear_history(&self) -> Result<()> {
         self.history.write().await.clear();

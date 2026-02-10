@@ -208,6 +208,18 @@ impl IpcClient {
         }
     }
 
+    /// Supprimer un job spécifique de l'historique
+    pub async fn remove_from_history(&self, job_id: Uuid) -> Result<()> {
+        let response = self
+            .send_request(RequestPayload::RemoveFromHistory { job_id })
+            .await?;
+        match response.payload {
+            ResponsePayload::Ok => Ok(()),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            _ => anyhow::bail!("Réponse inattendue"),
+        }
+    }
+
     /// Clear l'historique
     pub async fn clear_history(&self) -> Result<()> {
         let response = self.send_request(RequestPayload::ClearHistory).await?;

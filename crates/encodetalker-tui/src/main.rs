@@ -168,6 +168,25 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
+                    InputAction::RemoveFromHistory { job_id } => {
+                        match client.remove_from_history(job_id).await {
+                            Ok(()) => {
+                                app_state.set_status("Tâche supprimée de l'historique");
+                                app_state.history_jobs.retain(|j| j.id != job_id);
+                                // Ajuster l'index si nécessaire
+                                if app_state.selected_index >= app_state.history_jobs.len()
+                                    && app_state.selected_index > 0
+                                {
+                                    app_state.selected_index -= 1;
+                                }
+                            }
+                            Err(e) => {
+                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                    message: format!("Échec de la suppression: {}", e),
+                                });
+                            }
+                        }
+                    }
                     InputAction::ClearHistory => match client.clear_history().await {
                         Ok(()) => {
                             app_state.set_status("Historique effacé");
