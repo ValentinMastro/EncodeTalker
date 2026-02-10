@@ -1,9 +1,9 @@
 use super::{probe_video, StatsParser, VideoInfo};
 use anyhow::{Context, Result};
 use encodetalker_common::{AudioMode, EncoderType, EncodingJob, EncodingStats};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -14,6 +14,7 @@ pub struct EncodingPipeline {
     ffprobe_bin: PathBuf,
     svt_av1_bin: PathBuf,
     aom_bin: PathBuf,
+    precise_frame_count: bool,
 }
 
 impl EncodingPipeline {
@@ -22,12 +23,14 @@ impl EncodingPipeline {
         ffprobe_bin: PathBuf,
         svt_av1_bin: PathBuf,
         aom_bin: PathBuf,
+        precise_frame_count: bool,
     ) -> Self {
         Self {
             ffmpeg_bin,
             ffprobe_bin,
             svt_av1_bin,
             aom_bin,
+            precise_frame_count,
         }
     }
 
@@ -45,8 +48,14 @@ impl EncodingPipeline {
         );
 
         // 1. Probe du fichier source
-        let video_info =
-            probe_video(&self.ffprobe_bin, &job.input_path).context("Échec du probe vidéo")?;
+        let video_info = probe_video(
+            &self.ffprobe_bin,
+            &self.ffmpeg_bin,
+            &job.input_path,
+            self.precise_frame_count,
+        )
+        .await
+        .context("Échec du probe vidéo")?;
 
         info!(
             "Vidéo: {}x{} @ {:.2} fps, durée: {:?}",
@@ -86,7 +95,7 @@ impl EncodingPipeline {
         Ok(())
     }
 
-    /// Encoder la piste vidéo
+    /// Encoder la piste vidéo avec pipe kernel direct (std::process)
     async fn encode_video(
         &self,
         job: &EncodingJob,
@@ -97,11 +106,11 @@ impl EncodingPipeline {
     ) -> Result<()> {
         info!("Encodage vidéo avec {:?}", job.config.encoder);
 
-        // Construire la commande ffmpeg (demux + raw video)
-        let mut ffmpeg = Command::new(&self.ffmpeg_bin)
-            .arg("-progress")
-            .arg("pipe:2")
+        // 1. Spawner ffmpeg avec std::process (stdout piped)
+        let mut ffmpeg_child = std::process::Command::new(&self.ffmpeg_bin)
             .arg("-nostats")
+            .arg("-loglevel")
+            .arg("error")
             .arg("-i")
             .arg(&job.input_path)
             .arg("-f")
@@ -117,66 +126,164 @@ impl EncodingPipeline {
             .spawn()
             .context("Échec du démarrage de ffmpeg")?;
 
-        // Construire la commande de l'encodeur
-        let mut encoder = match job.config.encoder {
-            EncoderType::SvtAv1 => self.build_svt_av1_command(job, output_path),
-            EncoderType::Aom => self.build_aom_command(job, output_path),
+        // 2. Prendre stdout et stderr de ffmpeg
+        let ffmpeg_stdout = ffmpeg_child
+            .stdout
+            .take()
+            .context("Impossible de prendre stdout de ffmpeg")?;
+        let ffmpeg_stderr = ffmpeg_child
+            .stderr
+            .take()
+            .context("Impossible de prendre stderr de ffmpeg")?;
+
+        // 3. Spawner l'encodeur avec stdin = ffmpeg_stdout (PIPE KERNEL DIRECT)
+        let mut encoder_child = match job.config.encoder {
+            EncoderType::SvtAv1 => self.build_svt_av1_std_command(job, output_path),
+            EncoderType::Aom => self.build_aom_std_command(job, output_path),
         }
-        .stdin(Stdio::piped())
+        .stdin(Stdio::from(ffmpeg_stdout)) // <-- LE FIX: pipe kernel direct
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .context("Échec du démarrage de l'encodeur")?;
 
-        // Pipe ffmpeg stdout -> encoder stdin
-        let mut ffmpeg_stdout = ffmpeg.stdout.take().unwrap();
-        let mut encoder_stdin = encoder.stdin.take().unwrap();
+        let encoder_stderr = encoder_child
+            .stderr
+            .take()
+            .context("Impossible de prendre stderr de l'encodeur")?;
 
-        let pipe_task =
-            tokio::spawn(
-                async move { tokio::io::copy(&mut ffmpeg_stdout, &mut encoder_stdin).await },
-            );
+        // 4. Lire stderr de l'encodeur dans un thread OS (pour la progression)
+        // Note: SvtAv1EncApp utilise \r pour mettre à jour la même ligne, donc on doit
+        // lire octet par octet et splitter sur \r ET \n
+        let parser = StatsParser::new(video_info.total_frames, video_info.duration);
+        let stats_tx_clone = stats_tx.clone();
 
-        // Parser stderr de ffmpeg pour les stats
-        let ffmpeg_stderr = ffmpeg.stderr.take().unwrap();
-        let mut parser = StatsParser::new(video_info.total_frames, video_info.duration);
+        let encoder_stderr_handle = std::thread::spawn(move || {
+            use std::io::Read;
 
-        let parse_task = tokio::spawn(async move {
-            let reader = BufReader::new(ffmpeg_stderr);
-            let mut lines = reader.lines();
+            let mut reader = BufReader::new(encoder_stderr);
+            let mut parser = parser;
+            let mut buffer = Vec::new();
+            let mut byte = [0u8; 1];
 
-            while let Ok(Some(line)) = lines.next_line().await {
-                parser.parse_line(&line);
-                let _ = stats_tx.send(parser.clone_stats());
-            }
-        });
+            loop {
+                match reader.read(&mut byte) {
+                    Ok(0) => break, // EOF
+                    Ok(_) => {
+                        if byte[0] == b'\r' || byte[0] == b'\n' {
+                            // Ligne complète, parser
+                            if !buffer.is_empty() {
+                                if let Ok(line) = String::from_utf8(buffer.clone()) {
+                                    let line = line.trim();
+                                    if !line.is_empty() {
+                                        // Parser la ligne (format SvtAv1EncApp ou aomenc)
+                                        parser.parse_encoder_line(line);
 
-        // Attendre fin avec possibilité d'annulation
-        tokio::select! {
-            result = encoder.wait() => {
-                let status = result.context("Échec d'attente de l'encodeur")?;
-                if !status.success() {
-                    anyhow::bail!("L'encodeur a échoué avec le code {}", status);
+                                        // Envoyer les stats via le canal
+                                        if let Err(e) = stats_tx_clone.send(parser.clone_stats()) {
+                                            tracing::error!("Échec d'envoi des stats: {}", e);
+                                            break;
+                                        }
+                                    }
+                                }
+                                buffer.clear();
+                            }
+                        } else {
+                            buffer.push(byte[0]);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Erreur lecture stderr encodeur: {}", e);
+                        break;
+                    }
                 }
             }
+
+            tracing::debug!("Lecture stderr encodeur terminée");
+        });
+
+        // 5. Drainer stderr de ffmpeg dans un autre thread OS
+        let ffmpeg_stderr_handle = std::thread::spawn(move || {
+            let reader = BufReader::new(ffmpeg_stderr);
+
+            for line in reader.lines().flatten() {
+                if !line.is_empty() {
+                    tracing::error!("ffmpeg stderr: {}", line);
+                }
+            }
+
+            tracing::debug!("Lecture stderr ffmpeg terminée");
+        });
+
+        // 6. Attendre les processus avec possibilité d'annulation
+        let encoder_child_arc = std::sync::Arc::new(std::sync::Mutex::new(encoder_child));
+        let ffmpeg_child_arc = std::sync::Arc::new(std::sync::Mutex::new(ffmpeg_child));
+
+        let encoder_child_clone = encoder_child_arc.clone();
+        let ffmpeg_child_clone = ffmpeg_child_arc.clone();
+
+        tokio::select! {
             _ = cancel_rx.recv() => {
                 info!("Annulation demandée, arrêt des processus");
-                let _ = ffmpeg.kill().await;
-                let _ = encoder.kill().await;
+
+                // Kill les deux processus
+                if let Ok(mut encoder) = encoder_child_arc.lock() {
+                    let _ = encoder.kill();
+                }
+                if let Ok(mut ffmpeg) = ffmpeg_child_arc.lock() {
+                    let _ = ffmpeg.kill();
+                }
+
                 anyhow::bail!("Encodage annulé");
+            }
+            result = tokio::task::spawn_blocking(move || {
+                // Attendre l'encodeur d'abord (il consomme les données)
+                tracing::debug!("Attente de la fin de l'encodeur...");
+                let encoder_status = encoder_child_clone
+                    .lock()
+                    .unwrap()
+                    .wait()
+                    .context("Échec d'attente de l'encodeur")?;
+
+                if !encoder_status.success() {
+                    anyhow::bail!("L'encodeur a échoué avec le code {:?}", encoder_status.code());
+                }
+                tracing::debug!("Encodeur terminé avec succès");
+
+                // Attendre ffmpeg ensuite
+                tracing::debug!("Attente de la fin de ffmpeg...");
+                let ffmpeg_status = ffmpeg_child_clone
+                    .lock()
+                    .unwrap()
+                    .wait()
+                    .context("Échec d'attente de ffmpeg")?;
+
+                if !ffmpeg_status.success() {
+                    anyhow::bail!("ffmpeg a échoué avec le code {:?}", ffmpeg_status.code());
+                }
+                tracing::debug!("ffmpeg terminé avec succès");
+
+                Ok::<(), anyhow::Error>(())
+            }) => {
+                result??;
             }
         }
 
-        // Attendre que les tâches se terminent
-        let _ = pipe_task.await;
-        let _ = parse_task.await;
+        // 7. Joindre les threads stderr
+        if let Err(e) = encoder_stderr_handle.join() {
+            tracing::error!("Échec de jointure du thread stderr encodeur: {:?}", e);
+        }
+        if let Err(e) = ffmpeg_stderr_handle.join() {
+            tracing::error!("Échec de jointure du thread stderr ffmpeg: {:?}", e);
+        }
 
+        info!("Encodage vidéo terminé avec succès");
         Ok(())
     }
 
-    /// Construire la commande SVT-AV1
-    fn build_svt_av1_command(&self, job: &EncodingJob, output: &Path) -> Command {
-        let mut cmd = Command::new(&self.svt_av1_bin);
+    /// Construire la commande SVT-AV1 (std::process)
+    fn build_svt_av1_std_command(&self, job: &EncodingJob, output: &Path) -> std::process::Command {
+        let mut cmd = std::process::Command::new(&self.svt_av1_bin);
 
         cmd.arg("-i")
             .arg("stdin")
@@ -184,6 +291,8 @@ impl EncodingPipeline {
             .arg(job.config.encoder_params.crf.to_string())
             .arg("--preset")
             .arg(job.config.encoder_params.preset.to_string())
+            .arg("--progress")
+            .arg("2") // Activer la progression sur stderr
             .arg("-b")
             .arg(output);
 
@@ -195,9 +304,9 @@ impl EncodingPipeline {
         cmd
     }
 
-    /// Construire la commande aomenc
-    fn build_aom_command(&self, job: &EncodingJob, output: &Path) -> Command {
-        let mut cmd = Command::new(&self.aom_bin);
+    /// Construire la commande aomenc (std::process)
+    fn build_aom_std_command(&self, job: &EncodingJob, output: &Path) -> std::process::Command {
+        let mut cmd = std::process::Command::new(&self.aom_bin);
 
         cmd.arg("-")
             .arg("--cq-level")
@@ -315,22 +424,25 @@ impl EncodingPipeline {
 
         let mut cmd = Command::new(&self.ffmpeg_bin);
 
+        // Étape 1: Ajouter TOUS les inputs d'abord
         cmd.arg("-y") // Écraser sans demander
             .arg("-i")
-            .arg(video_path) // Vidéo AV1
+            .arg(video_path) // Input 0: Vidéo AV1
             .arg("-i")
-            .arg(audio_path); // Audio
+            .arg(audio_path); // Input 1: Audio
 
-        // Mapper vidéo et audio
+        // Ajouter l'input source pour les sous-titres si nécessaire
+        if !video_info.subtitle_streams.is_empty() {
+            cmd.arg("-i").arg(&job.input_path); // Input 2: Source pour sous-titres
+        }
+
+        // Étape 2: Ajouter TOUS les -map ensuite
         cmd.arg("-map")
             .arg("0:v:0") // Vidéo du premier input
             .arg("-map")
             .arg("1:a:0"); // Audio du deuxième input
 
-        // Ajouter les sous-titres depuis la source si demandé
         if !video_info.subtitle_streams.is_empty() {
-            cmd.arg("-i").arg(&job.input_path); // Input source pour sous-titres
-
             if let Some(streams) = &job.config.subtitle_streams {
                 for stream_idx in streams {
                     cmd.arg("-map").arg(format!("2:s:{}", stream_idx));
@@ -339,15 +451,16 @@ impl EncodingPipeline {
                 // Par défaut, copier tous les sous-titres
                 cmd.arg("-map").arg("2:s?");
             }
+        }
 
-            // Copier les sous-titres sans réencodage
+        // Étape 3: Options de codec (copie sans réencodage)
+        cmd.arg("-c:v").arg("copy").arg("-c:a").arg("copy");
+
+        if !video_info.subtitle_streams.is_empty() {
             cmd.arg("-c:s").arg("copy");
         }
 
-        // Copier les streams sans réencodage
-        cmd.arg("-c:v").arg("copy").arg("-c:a").arg("copy");
-
-        // Output MKV
+        // Étape 4: Output MKV
         cmd.arg(&job.output_path);
 
         let output = cmd.output().await.context("Échec du muxage")?;
