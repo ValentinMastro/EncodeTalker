@@ -55,6 +55,11 @@ pub enum InputAction {
         output_path: std::path::PathBuf,
         config: encodetalker_common::EncodingConfig,
     },
+    /// Ajouter plusieurs jobs avec la même config
+    AddBatchJobs {
+        jobs: Vec<(std::path::PathBuf, std::path::PathBuf)>,
+        config: encodetalker_common::EncodingConfig,
+    },
     CancelJob {
         job_id: uuid::Uuid,
     },
@@ -78,15 +83,41 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             state.move_down();
             InputAction::None
         }
+
+        // Toggle sélection avec ESPACE
+        KeyCode::Char(' ') => {
+            state.file_browser.toggle_selection(state.selected_index);
+            InputAction::None
+        }
+
+        // Ctrl+A sélectionner toutes les vidéos
+        KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            state.file_browser.select_all_videos();
+            InputAction::None
+        }
+
+        // Ctrl+D désélectionner tout
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            state.file_browser.clear_selection();
+            InputAction::None
+        }
+
+        // Logique Enter pour batch
         KeyCode::Enter => {
-            // Naviguer ou sélectionner
+            let selected_files = state.file_browser.get_selected_files();
+
             if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
                 if entry.is_dir {
-                    // Naviguer vers le répertoire
+                    // Toujours naviguer dans les dossiers (priorité)
                     state.file_browser.navigate_to(entry.path.clone());
                     state.selected_index = 0;
+                } else if !selected_files.is_empty() {
+                    // Batch avec fichiers sélectionnés
+                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new_batch(
+                        selected_files,
+                    )));
                 } else if entry.is_video {
-                    // Ouvrir le dialogue de configuration
+                    // Single file: comportement actuel
                     state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
                         entry.path.clone(),
                     )));
@@ -94,8 +125,9 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             }
             InputAction::None
         }
+
+        // 'a' : Shortcut pour single file (ignore les sélections, compatibilité)
         KeyCode::Char('a') => {
-            // Ajouter le fichier sélectionné (shortcut)
             if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
                 if entry.is_video {
                     state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
@@ -105,6 +137,7 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             }
             InputAction::None
         }
+
         KeyCode::Char('r') => {
             // Rafraîchir
             state.file_browser.refresh();
@@ -293,8 +326,8 @@ fn handle_output_path_editing(config: &mut EncodeConfigDialog, key: KeyEvent) ->
 /// Gérer les touches dans le dialogue de config d'encodage
 fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
     if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
-        // Si en mode édition du chemin
-        if config.is_editing_output {
+        // Si en mode édition du chemin (désactivé si batch)
+        if config.is_editing_output && !config.is_batch() {
             return handle_output_path_editing(config, key);
         }
 
@@ -312,40 +345,75 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Left | KeyCode::Right => {
-                // Si sur field 5 et →, activer l'édition
+                // Si sur field 5 (output path) et batch, ne rien faire
                 if config.selected_field == 5 && key.code == KeyCode::Right {
-                    config.start_editing_output();
+                    if !config.is_batch() {
+                        config.start_editing_output();
+                    }
                 } else {
                     toggle_field_value(config, key.code == KeyCode::Right);
                 }
                 return InputAction::None;
             }
+
+            // Validation avec logique batch
             KeyCode::Enter => {
-                // Si sur field 5, activer l'édition
-                if config.selected_field == 5 {
+                // Si sur field 5 et pas batch, activer l'édition
+                if config.selected_field == 5 && !config.is_batch() {
                     config.start_editing_output();
                     return InputAction::None;
                 }
 
-                // Valider et ajouter le job
-                let input_path = config.input_path.clone();
-                let output_path = config.output_path.clone();
                 let encoding_config = config.config.clone();
 
-                state.dialog = None;
-                state.set_status("Job ajouté à la queue");
+                if config.is_batch() {
+                    // Créer plusieurs jobs
+                    let jobs: Vec<(std::path::PathBuf, std::path::PathBuf)> = config
+                        .input_paths
+                        .iter()
+                        .map(|input| {
+                            let output = generate_output_path(input);
+                            (input.clone(), output)
+                        })
+                        .collect();
 
-                return InputAction::AddJob {
-                    input_path,
-                    output_path,
-                    config: encoding_config,
-                };
+                    state.dialog = None;
+                    state.set_status(format!("{} jobs ajoutés à la queue", jobs.len()));
+
+                    // Clear les sélections après ajout
+                    state.file_browser.clear_selection();
+
+                    return InputAction::AddBatchJobs {
+                        jobs,
+                        config: encoding_config,
+                    };
+                } else {
+                    // Single job: comportement actuel
+                    let input_path = config.input_paths[0].clone();
+                    let output_path = config.output_path.clone();
+
+                    state.dialog = None;
+                    state.set_status("Job ajouté à la queue");
+
+                    return InputAction::AddJob {
+                        input_path,
+                        output_path,
+                        config: encoding_config,
+                    };
+                }
             }
             _ => {}
         }
     }
 
     InputAction::None
+}
+
+/// Générer le chemin de sortie pour un fichier d'entrée
+fn generate_output_path(input: &std::path::Path) -> std::path::PathBuf {
+    let mut output = input.to_path_buf();
+    output.set_extension("");
+    std::path::PathBuf::from(format!("{}.av1.mkv", output.display()))
 }
 
 /// Changer la valeur d'un champ dans le dialogue de config

@@ -25,9 +25,19 @@ fn render_encode_config_dialog(
     let clear = Clear;
     frame.render_widget(clear, dialog_area);
 
+    // Titre adapté au batch
+    let title = if config.is_batch() {
+        format!(
+            " Configuration d'encodage ({} fichiers) ",
+            config.input_paths.len()
+        )
+    } else {
+        " Configuration d'encodage ".to_string()
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Configuration d'encodage ")
+        .title(title)
         .border_style(Style::default().fg(Color::Cyan));
 
     let inner = block.inner(dialog_area);
@@ -49,13 +59,17 @@ fn render_encode_config_dialog(
         ])
         .split(inner);
 
-    // Input file
-    let input_text = format!("Input:  {}", config.input_path.display());
+    // Input file - Affichage adapté au batch
+    let input_text = if config.is_batch() {
+        format!("Input:  {} fichiers sélectionnés", config.input_paths.len())
+    } else {
+        format!("Input:  {}", config.input_paths[0].display())
+    };
     let input = Paragraph::new(input_text).style(Style::default().fg(Color::White));
     frame.render_widget(input, chunks[0]);
 
-    // Output file (éditable)
-    let output_style = if config.selected_field == 5 {
+    // Output file (éditable) - Style grisé si batch
+    let output_style = if config.selected_field == 5 && !config.is_batch() {
         if config.is_editing_output {
             Style::default()
                 .fg(Color::Green)
@@ -65,11 +79,16 @@ fn render_encode_config_dialog(
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD)
         }
+    } else if config.is_batch() {
+        Style::default().fg(Color::DarkGray) // Grisé si batch
     } else {
         Style::default().fg(Color::White)
     };
 
-    let output_text = if config.is_editing_output {
+    // Texte output adapté
+    let output_text = if config.is_batch() {
+        "Output: <auto-généré: {nom}.av1.mkv>".to_string()
+    } else if config.is_editing_output {
         // Mode édition : afficher avec curseur (utiliser chars() pour gérer UTF-8)
         let chars: Vec<char> = config.output_path_string.chars().collect();
         let before: String = chars[..config.output_path_cursor].iter().collect();
@@ -171,9 +190,11 @@ fn render_encode_config_dialog(
     let threads = Paragraph::new(threads_text).style(threads_style);
     frame.render_widget(threads, chunks[6]);
 
-    // Instructions
+    // Instructions - Adaptées au batch
     let instructions_text = if config.is_editing_output {
         "←→: Déplacer curseur | Caractère: Insérer | Backspace/Suppr: Effacer | Entrée: Valider | ESC: Annuler"
+    } else if config.is_batch() {
+        "↑↓: Naviguer | ←→: Changer valeur | Entrée: Ajouter tous les jobs | ESC: Annuler"
     } else {
         "↑↓: Naviguer | ←→: Changer valeur | Entrée: Ajouter à la queue | ESC: Annuler"
     };

@@ -3,9 +3,22 @@ use ratatui::{prelude::*, widgets::*};
 
 /// Rendre le navigateur de fichiers
 pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
+    // Compteur de sélections dans le titre
+    let selection_count = state.file_browser.selected_files.len();
+    let title = if selection_count > 0 {
+        format!(
+            " 📁 {} ({} sélectionné{}) ",
+            state.file_browser.current_dir.display(),
+            selection_count,
+            if selection_count > 1 { "s" } else { "" }
+        )
+    } else {
+        format!(" 📁 {} ", state.file_browser.current_dir.display())
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" 📁 {} ", state.file_browser.current_dir.display()))
+        .title(title)
         .border_style(Style::default().fg(Color::Cyan));
 
     // Créer les items de la liste
@@ -22,7 +35,23 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
                 "📄"
             };
 
-            let style = if entry.is_dir {
+            // Checkbox pour les vidéos
+            let checkbox = if entry.is_video {
+                if state.file_browser.is_selected(&entry.path) {
+                    "☑ "
+                } else {
+                    "  " // 2 espaces pour alignement
+                }
+            } else {
+                "  "
+            };
+
+            // Style pour sélections
+            let style = if state.file_browser.is_selected(&entry.path) {
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else if entry.is_dir {
                 Style::default()
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD)
@@ -32,7 +61,7 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
                 Style::default().fg(Color::DarkGray)
             };
 
-            let text = format!("{} {}", icon, entry.name);
+            let text = format!("{}{} {}", checkbox, icon, entry.name);
             ListItem::new(text).style(style)
         })
         .collect();

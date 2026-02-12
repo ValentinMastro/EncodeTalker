@@ -132,6 +132,50 @@ async fn main() -> Result<()> {
                             }
                         }
                     }
+                    InputAction::AddBatchJobs { jobs, config } => {
+                        let total = jobs.len();
+                        let mut success_count = 0;
+                        let mut errors = Vec::new();
+
+                        for (input_path, output_path) in jobs {
+                            match client
+                                .add_job(input_path.clone(), output_path, config.clone())
+                                .await
+                            {
+                                Ok(_job_id) => {
+                                    success_count += 1;
+                                }
+                                Err(e) => {
+                                    let filename = input_path
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .to_string();
+                                    errors.push(format!("{}: {}", filename, e));
+                                }
+                            }
+                        }
+
+                        if success_count == total {
+                            app_state.set_status(format!("{} jobs ajoutés avec succès", total));
+                        } else {
+                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                message: format!(
+                                    "{}/{} jobs ajoutés. Échecs:\n{}",
+                                    success_count,
+                                    total,
+                                    errors.join("\n")
+                                ),
+                            });
+                        }
+
+                        // Rafraîchir les listes
+                        if let Ok((queue, active, history)) = client.refresh_all().await {
+                            app_state.queue_jobs = queue;
+                            app_state.active_jobs = active;
+                            app_state.history_jobs = history;
+                        }
+                    }
                     InputAction::CancelJob { job_id } => {
                         match client.cancel_job(job_id).await {
                             Ok(()) => {
