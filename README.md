@@ -1,291 +1,350 @@
 # EncodeTalker
 
-Un wrapper Rust autour de ffmpeg avec interface TUI pour gérer l'encodage vidéo en AV1.
+A Rust-based TUI wrapper around FFmpeg for managing AV1 video encoding with a persistent daemon architecture.
 
-## Caractéristiques
+## ✨ Features
 
-- **Architecture client-serveur** : Le daemon gère l'encodage en arrière-plan, le TUI est reconnectable
-- **Persistance** : Les jobs d'encodage continuent même si vous fermez le TUI
-- **Queue intelligente** : Gestion automatique de la queue avec concurrence configurable
-- **Compilation automatique des dépendances** : ffmpeg, SVT-AV1-psy, libaom
-- **Suivi temps réel** : Progression, FPS, ETA pour chaque encodage
-- **Pipeline flexible** : Support SVT-AV1 et libaom, audio Opus ou copy, sous-titres
+- **Client-Server Architecture**: Daemon handles encoding in the background, TUI is reconnectable
+- **Persistent Encoding Jobs**: Jobs continue even if you close the TUI - reconnect anytime
+- **Intelligent Queue Management**: Automatic job scheduling with configurable concurrency
+- **Batch File Selection**: Select multiple files with Space, Ctrl+A (select all), Ctrl+D (deselect all)
+- **Automatic Dependency Building**: Compiles FFmpeg, SVT-AV1-PSY, and libaom locally (no sudo required!)
+- **Real-Time Progress Tracking**: Live FPS, ETA, and progress bars for each encoding job
+- **Flexible Encoding Pipeline**: Support for SVT-AV1 and libaom encoders
+- **Wide Format Support**: Handles .mp4, .mkv, .avi, .mov, .webm, .m2ts (BDMV) and more
+- **Audio Flexibility**: Encode to Opus or copy original audio streams
+- **Subtitle Passthrough**: Automatically preserves all subtitle tracks
+- **Smart Configuration**: Per-encode settings or use sensible defaults
+- **Cross-Session State**: Persistent queue and history across restarts
 
-## Structure du projet
-
-```
-EncodeTalker/
-├── crates/
-│   ├── encodetalker-common/     # Types communs et protocole IPC
-│   ├── encodetalker-daemon/     # Daemon d'encodage
-│   ├── encodetalker-tui/        # Interface TUI (TODO)
-│   └── encodetalker-deps/       # Gestion des dépendances
-└── config/
-    └── default.toml             # Configuration par défaut
-```
-
-## État d'implémentation
-
-### ✅ Phase 1 : Infrastructure (Complète)
-- Types communs (Job, Status, Stats, Config)
-- Protocole IPC (Request/Response/Event)
-- Gestion des chemins de l'application
-
-### ✅ Phase 2 : Gestion des dépendances (Complète)
-- Détection automatique des binaires
-- Téléchargement des sources
-- Compilation de ffmpeg, SVT-AV1-psy, libaom
-- Installation dans `~/.local/share/encodetalker/deps/`
-
-### ✅ Phase 3 : Daemon (Complète)
-- Queue manager avec concurrence configurable
-- Pipeline d'encodage (ffmpeg → encodeur → ffmpeg muxing)
-- Parser de stats ffmpeg en temps réel
-- Serveur IPC Unix socket avec broadcast d'événements
-- Persistance de l'état (JSON)
-- Auto-save toutes les 10 secondes
-- Shutdown graceful
-
-### ✅ Phase 4 : TUI (Complète)
-- Interface ratatui avec 4 vues principales
-- **FileBrowser** : Navigation filesystem avec filtrage des vidéos
-- **QueueView** : Liste des jobs en attente
-- **ActiveView** : Jobs en cours avec stats temps réel et barres de progression
-- **HistoryView** : Historique avec retry des jobs failed
-- Client IPC avec reconnexion automatique
-- Démarrage automatique du daemon
-- Dialogues interactifs :
-  * Configuration d'encodage (encoder, audio, CRF, preset)
-  * Confirmation (annulation, clear history)
-  * Affichage d'erreurs
-- Gestion clavier complète (vim-like + flèches)
-- Rafraîchissement automatique toutes les 500ms
-- Événements temps réel du daemon (progression, completion)
-
-### ✅ Phase 5 : Polish (Complète)
-- Code formaté avec `cargo fmt`
-- Tous les warnings clippy corrigés
-- Documentation complète dans README.md
-- Logs détaillés avec tracing
-- Gestion robuste des erreurs
-
-## Compilation
+## 🚀 Quick Start
 
 ```bash
-# Compiler tout le workspace
+# Build the project
 cargo build --release
 
-# Compiler uniquement le daemon
-cargo build --release -p encodetalker-daemon
+# Launch the TUI (automatically starts daemon if needed)
+./target/release/encodetalker-tui
 ```
 
-## Utilisation
+The first launch will compile dependencies (~40-55 minutes). Subsequent launches are instant.
 
-### Lancement du TUI (recommandé)
+See [System Requirements](#-system-requirements) for build dependencies.
+
+## 📦 System Requirements
+
+To build the encoding dependencies (FFmpeg, SVT-AV1, libaom), install:
+
+### Arch Linux / Manjaro
+```bash
+sudo pacman -S base-devel cmake git nasm
+```
+
+### Ubuntu / Debian
+```bash
+sudo apt install build-essential cmake git nasm
+```
+
+### Fedora
+```bash
+sudo dnf install @development-tools cmake git nasm
+```
+
+**Note**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required for runtime!** 🎉
+
+### ⏱️ First-Time Compilation
+
+The daemon automatically compiles missing dependencies:
+- **FFmpeg**: 15-20 minutes
+- **SVT-AV1-PSY**: 10-15 minutes
+- **libaom**: 15-20 minutes
+
+**Total: ~40-55 minutes** (one-time setup)
+
+## 🎯 Usage
+
+### Launching the TUI
 
 ```bash
 ./target/release/encodetalker-tui
 ```
 
-Le TUI va :
-1. Vérifier si le daemon est en cours d'exécution
-2. Démarrer automatiquement le daemon si nécessaire
-3. Se connecter au daemon via IPC
-4. Afficher l'interface interactive
+The TUI will:
+1. Check if the daemon is running
+2. Auto-start the daemon if needed
+3. Connect via IPC (Unix socket)
+4. Display the interactive interface
 
-**Navigation :**
-- `Tab` : Changer de vue (Files → Queue → Active → History)
-- `↑↓` ou `k`/`j` : Naviguer dans les listes
-- `Enter` : Ouvrir un répertoire ou configurer un fichier vidéo
-- `a` : Ajouter une vidéo à la queue (dans Files)
-- `c` : Annuler un job (dans Queue/Active)
-- `r` : Rafraîchir ou Retry un job failed (dans History)
-- `C` : Clear l'historique (dans History)
-- `q` : Quitter
+### Basic Navigation
 
-### Démarrage manuel du daemon (optionnel)
+- **Tab**: Switch between views (Files → Queue → Active → History)
+- **↑↓** or **k**/**j**: Navigate lists
+- **Enter**: Open directory or configure video file
+- **q**: Quit (daemon keeps running in background)
+
+### Batch Encoding (NEW!)
+
+In the **File Browser** view, you can now select multiple files at once:
+
+- **Space**: Toggle selection for current file
+- **Ctrl+A**: Select all files in current directory
+- **Ctrl+D**: Deselect all files
+- **a**: Add all selected files to encoding queue
+
+This makes it easy to encode entire directories or specific sets of files with the same settings.
+
+### Typical Workflow
+
+1. **Launch TUI**: `./target/release/encodetalker-tui`
+2. **Navigate to your videos**: Use `↑↓` and `Enter` in the Files tab
+3. **Select files**:
+   - Single file: Press `a` or `Enter` on a video file
+   - Multiple files: Use `Space` to select, then `a` to add batch
+4. **Configure encoding** (appears as dialog):
+   - Choose encoder (SVT-AV1 or libaom)
+   - Configure audio (Opus or Copy)
+   - Adjust CRF (quality) and Preset (speed)
+   - Confirm with `Enter`
+5. **Monitor progress**: Switch to Active tab (`Tab`)
+6. **Check results**: View completed jobs in History tab
+
+**Pro tip**: You can close the TUI at any time - the daemon keeps encoding. Relaunch the TUI to reconnect and check progress!
+
+### Manual Daemon Launch (Optional)
 
 ```bash
 ./target/release/encodetalker-daemon
 ```
 
-Le daemon va :
-1. Vérifier les dépendances dans `~/.local/share/encodetalker/deps/bin/`
-2. Compiler les dépendances manquantes (peut prendre 30-60 minutes la première fois)
-3. Écouter sur le socket Unix : `~/.local/share/encodetalker/daemon.sock`
-4. Charger l'état sauvegardé s'il existe
+The daemon will:
+- Check for dependencies in `~/.local/share/encodetalker/deps/bin/`
+- Compile missing dependencies (if needed)
+- Listen on Unix socket: `~/.local/share/encodetalker/daemon.sock`
+- Load saved state (queue, history)
 
-### Dépendances système requises
+## ⌨️ Keyboard Shortcuts
 
-Pour compiler les dépendances (ffmpeg, SVT-AV1, libaom), vous devez installer :
+### Global
+| Key | Action |
+|-----|--------|
+| `Tab` | Next view |
+| `Shift+Tab` | Previous view |
+| `q` | Quit TUI (daemon continues) |
 
-```bash
-# Sur Arch Linux / Manjaro
-sudo pacman -S base-devel cmake git nasm
+### File Browser
+| Key | Action |
+|-----|--------|
+| `↑↓` / `k`/`j` | Navigate files |
+| `Enter` | Open directory or configure video |
+| `a` | Add selected file(s) to queue |
+| `Space` | Toggle selection (batch mode) |
+| `Ctrl+A` | Select all files |
+| `Ctrl+D` | Deselect all files |
+| `r` | Refresh directory |
 
-# Sur Ubuntu / Debian
-sudo apt install build-essential cmake git nasm
+### Queue View
+| Key | Action |
+|-----|--------|
+| `↑↓` / `k`/`j` | Navigate jobs |
+| `c` | Cancel selected job |
+| `r` | Refresh |
 
-# Sur Fedora
-sudo dnf install @development-tools cmake git nasm
-```
+### Active View
+| Key | Action |
+|-----|--------|
+| `↑↓` / `k`/`j` | Navigate active jobs |
+| `c` | Cancel selected job |
+| `r` | Refresh |
 
-**Note** : Toutes les dépendances sont compilées localement sans nécessiter d'accès sudo ! 🎉
+### History View
+| Key | Action |
+|-----|--------|
+| `↑↓` / `k`/`j` | Navigate history |
+| `r` | Retry failed job |
+| `Shift+C` | Clear all history |
+| `d` | Delete selected history entry |
+| `Ctrl+A` | Select all entries |
+| `Ctrl+D` | Deselect all entries |
+| `Delete` | Delete selected entries |
 
-⏱️ **Temps de compilation estimé** :
-- FFmpeg : 15-20 min
-- SVT-AV1 : 10-15 min
-- libaom : 15-20 min
+### Dialogs (Encoding Config, Confirmations)
+| Key | Action |
+|-----|--------|
+| `↑↓` | Navigate fields |
+| `←→` | Change value |
+| `Enter` | Confirm |
+| `ESC` | Cancel |
 
-**Total : ~40-55 minutes la première fois**
+## ⚙️ Configuration
 
-**Muxing** : ffmpeg est utilisé pour créer les fichiers MKV finaux (pas besoin de mkvtoolnix)
-
-## Configuration
-
-Le fichier de configuration est `~/.config/encodetalker/config.toml` :
+Configuration file: `~/.config/encodetalker/config.toml`
 
 ```toml
 [daemon]
-max_concurrent_jobs = 1  # Nombre de jobs simultanés
+max_concurrent_jobs = 1  # Number of simultaneous encoding jobs
 socket_path = "~/.local/share/encodetalker/daemon.sock"
-log_level = "info"
+log_level = "info"       # Logging verbosity: trace, debug, info, warn, error
 
 [encoding]
-default_encoder = "svt-av1"
-default_audio_mode = "opus"
-default_audio_bitrate = 128
-output_suffix = ".av1"
+default_encoder = "svt-av1"        # Default encoder: "svt-av1" or "aom"
+default_audio_mode = "opus"        # Audio mode: "opus" or "copy"
+default_audio_bitrate = 128        # Opus bitrate in kbps
+output_suffix = ".av1"             # Suffix for output files
+precise_frame_count = false        # Enable accurate frame counting (slower probe)
 
 [encoder.svt-av1]
-preset = 6     # 0-13, plus élevé = plus rapide
-crf = 30       # 0-63, plus bas = meilleure qualité
-params = ["--keyint", "240", "--tune", "3"]
+preset = 6     # 0-13, higher = faster encoding
+crf = 30       # 0-63, lower = better quality
+params = ["--keyint", "240", "--tune", "3"]  # Additional encoder parameters
 
 [encoder.aom]
-cpu-used = 4   # 0-8, plus élevé = plus rapide
-crf = 30
+cpu-used = 4   # 0-8, higher = faster encoding
+crf = 30       # 0-63, lower = better quality
 
 [ui]
-file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"]
-refresh_interval_ms = 500
+file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m2ts"]
+refresh_interval_ms = 500  # UI refresh rate
 ```
 
-## Fichiers créés
+### Configuration Notes
 
-- `~/.local/share/encodetalker/` : Répertoire de données
-  - `deps/bin/` : Binaires compilés (ffmpeg, ffprobe, SvtAv1EncApp, aomenc)
-  - `deps/src/` : Sources téléchargées
-  - `state.json` : État persisté (queue, active jobs, history)
-  - `daemon.sock` : Socket Unix pour IPC
-  - `daemon.log` : Logs du daemon
-- `~/.config/encodetalker/` : Configuration
-  - `config.toml` : Configuration utilisateur
+- **CRF values**: Lower = better quality but larger files. Recommended range: 28-35
+- **Presets**: Higher presets encode faster but may reduce compression efficiency
+- **Audio modes**:
+  - `opus`: Transcode audio to Opus (efficient, lossy)
+  - `copy`: Copy original audio streams (lossless, keeps original codec)
+- **precise_frame_count**: When `true`, probes every frame for accurate count (slower). When `false`, estimates from headers (faster, may be inaccurate for some formats).
 
-## Architecture technique
+## 📁 Files and Directories
 
-### Pipeline d'encodage
+EncodeTalker creates the following directories:
+
+### Data Directory: `~/.local/share/encodetalker/`
+- **deps/bin/**: Compiled binaries (ffmpeg, ffprobe, SvtAv1EncApp, aomenc)
+- **deps/src/**: Downloaded source code (kept for reference)
+- **state.json**: Persisted state (queue, active jobs, history)
+- **daemon.sock**: Unix socket for IPC communication
+- **daemon.log**: Daemon log file
+
+### Config Directory: `~/.config/encodetalker/`
+- **config.toml**: User configuration (created from defaults if missing)
+
+### Output Files
+Encoded videos are saved next to the original file with the configured suffix (default: `.av1.mkv`).
+
+Example:
+```
+/path/to/video.mp4  →  /path/to/video.av1.mkv
+```
+
+## 🏗️ Architecture Overview
+
+EncodeTalker uses a client-server architecture for resilient encoding:
+
+### Encoding Pipeline
 
 ```
-fichier.mp4
+input.mp4
     │
-    ├─→ ffmpeg (demux + raw video en yuv4mpegpipe)
+    ├─→ ffmpeg (demux + raw video in yuv4mpegpipe format)
     │       │
-    │       ↓ stdout
-    │   Encodeur (SVT-AV1 ou libaom)
+    │       ↓ stdout pipe
+    │   AV1 Encoder (SVT-AV1-PSY or libaom)
     │       │
     │       ↓ output
-    │   fichier.ivf (vidéo AV1)
+    │   video.ivf (raw AV1 video)
     │
     └─→ ffmpeg (extract audio)
             │
             ↓
-        audio.opus (ou copy)
+        audio.opus (or copied stream)
 
-Ensuite:
-    ffmpeg (mux vidéo.ivf + audio.opus + subtitles) → fichier.mkv
+Final step:
+    ffmpeg (mux video.ivf + audio + subtitles) → output.mkv
 ```
 
-### Protocole IPC
+**Note**: The entire pipeline uses FFmpeg for muxing (not mkvtoolnix).
 
-Communication via Unix socket avec messages bincode sérialisés :
+### Component Communication
 
-- **Requests** : AddJob, CancelJob, RetryJob, ListQueue, ListActive, ListHistory, etc.
-- **Responses** : Ok, Error, Job, JobList, Stats, etc.
-- **Events** (broadcast) : JobAdded, JobStarted, JobProgress, JobCompleted, JobFailed, JobCancelled
+- **Daemon**: Background process managing the encoding queue
+- **TUI**: Interactive terminal interface (client)
+- **IPC Protocol**: Communication via Unix socket with bincode-serialized messages
+- **Event Broadcasting**: Real-time progress updates sent to all connected clients
+- **State Persistence**: Queue and history saved to JSON every 10 seconds
 
-### Gestion de la queue
+### Key Design Principles
 
-- Jobs stockés dans une `VecDeque<EncodingJob>`
-- Jobs actifs dans `HashMap<Uuid, EncodingJob>`
-- Historique dans `Vec<EncodingJob>`
-- Démarrage automatique quand des slots se libèrent
-- Notified pattern avec `tokio::sync::Notify` pour éviter les boucles actives
+1. **Resilience**: Daemon runs independently - clients can disconnect/reconnect freely
+2. **Persistence**: All state survives daemon restarts
+3. **Efficiency**: Piped data flow (no temporary files between encoding steps)
+4. **Transparency**: Real-time stats parsed from FFmpeg output
 
-## Workflow typique
+For detailed technical documentation, see [CLAUDE.md](CLAUDE.md).
 
-1. **Lancer le TUI** : `./target/release/encodetalker-tui`
-2. **Naviguer vers vos vidéos** : Utiliser `↑↓` et `Enter` dans l'onglet Files
-3. **Sélectionner une vidéo** : Appuyer sur `a` ou `Enter` sur un fichier vidéo
-4. **Configurer l'encodage** :
-   - Choisir l'encodeur (SVT-AV1 ou libaom)
-   - Configurer l'audio (Opus ou Copy)
-   - Ajuster CRF (qualité) et Preset (vitesse)
-   - Valider avec `Enter`
-5. **Surveiller la progression** : Basculer vers l'onglet Active (Tab)
-6. **Vérifier les résultats** : Consulter l'historique dans l'onglet History
+## 🔧 Current Limitations
 
-Le TUI se reconnecte automatiquement au daemon, vous pouvez le fermer et revenir plus tard !
+EncodeTalker is actively developed. Current limitations:
 
-## Raccourcis clavier
+- **Manual stream selection not implemented**: All audio/subtitle streams are included by default
+- **Single encoder instance per job**: No multi-pass encoding yet
+- **No remote API**: Daemon only accessible via local Unix socket
+- **Linux-only**: Not tested on macOS/Windows (PRs welcome!)
+- **Limited audio options**: Only Opus encoding or copy (no other codecs)
+- **No video filters**: Cropping, resizing, denoising not yet implemented
+- **No preset system**: Cannot save/load encoding configurations
 
-### Globaux
-- `Tab` : Vue suivante
-- `Shift+Tab` : Vue précédente
-- `q` : Quitter
+See [GitHub Issues](https://github.com/yourusername/EncodeTalker/issues) for planned features and known bugs.
 
-### File Browser
-- `↑↓` / `k`/`j` : Naviguer
-- `Enter` : Ouvrir répertoire ou configurer vidéo
-- `a` : Ajouter à la queue
-- `r` : Rafraîchir
+## 🤝 Contributing
 
-### Queue & Active
-- `↑↓` / `k`/`j` : Naviguer
-- `c` : Annuler le job sélectionné
-- `r` : Rafraîchir
+Contributions are welcome! To get started:
 
-### History
-- `↑↓` / `k`/`j` : Naviguer
-- `r` : Retry un job failed
-- `Shift+C` : Clear tout l'historique
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines
+2. Check [CLAUDE.md](CLAUDE.md) for architecture and coding conventions
+3. Look for issues labeled `good-first-issue` or `help-wanted`
+4. Fork the repo, make your changes, and submit a PR
 
-### Dialogues
-- `↑↓` : Naviguer entre les champs
-- `←→` : Modifier la valeur
-- `Enter` : Valider
-- `ESC` : Annuler
+### Development Quick Start
 
-## Limitations actuelles
+```bash
+# Clone repository
+git clone https://github.com/yourusername/EncodeTalker.git
+cd EncodeTalker
 
-- Sélection manuelle des streams audio/sous-titres non implémentée (tous inclus par défaut)
-- Pas d'API pour interagir avec le daemon (sauf via le socket Unix)
-- Un seul job simultané par défaut (configurable)
-- Pipeline audio simplifié (Opus ou copy uniquement)
+# Build and test
+cargo build
+cargo test --all
 
-## Prochaines étapes
+# Format and lint (required before committing)
+cargo fmt --all
+cargo clippy --all-targets --all-features
 
-1. Implémenter le TUI avec ratatui
-2. Ajouter des tests d'intégration
-3. Améliorer la gestion des erreurs
-4. Support de plus d'encodeurs (x264, x265, VP9)
-5. Encodage multi-pass
-6. Filtres vidéo (crop, resize, denoise)
+# Run with debug logs
+RUST_LOG=debug ./target/release/encodetalker-daemon
+```
 
-## Licence
+## 📄 License
 
-MIT OR Apache-2.0
+Licensed under either of:
 
-## Auteurs
+- **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 
-EncodeTalker Team
+at your option.
+
+## 🙏 Acknowledgments
+
+EncodeTalker builds upon excellent open-source projects:
+
+- **[FFmpeg](https://ffmpeg.org/)**: Universal media framework
+- **[SVT-AV1-PSY](https://github.com/gianni-rosato/svt-av1-psy)**: Optimized AV1 encoder
+- **[libaom](https://aomedia.googlesource.com/aom/)**: Reference AV1 encoder
+- **[Ratatui](https://ratatui.rs/)**: Terminal UI framework
+- **[Tokio](https://tokio.rs/)**: Async runtime for Rust
+
+---
+
+**Made with ❤️ by the EncodeTalker Team**
+
+*Questions? Issues? Feature requests? Open an issue on GitHub!*
