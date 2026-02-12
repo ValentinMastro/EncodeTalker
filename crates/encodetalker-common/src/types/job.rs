@@ -73,6 +73,8 @@ pub struct EncoderParams {
     pub crf: u32,
     /// Preset de vitesse (pour SVT-AV1: 0-13, pour aom: 0-8)
     pub preset: u32,
+    /// Nombre de threads (None = auto, Some(n) = n threads)
+    pub threads: Option<u32>,
     /// Paramètres additionnels en ligne de commande
     pub extra_params: Vec<String>,
 }
@@ -82,6 +84,7 @@ impl Default for EncoderParams {
         Self {
             crf: 30,
             preset: 6,
+            threads: None, // Auto par défaut
             extra_params: vec![],
         }
     }

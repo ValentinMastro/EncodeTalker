@@ -245,6 +245,7 @@ pub enum ConfirmAction {
     CancelJob,
     RemoveFromHistory,
     ClearHistory,
+    Quit,
 }
 
 /// Dialogue de configuration d'encodage
@@ -285,8 +286,8 @@ impl EncodeConfigDialog {
     }
 
     pub fn move_field_down(&mut self) {
-        // 5 champs : encodeur, audio mode, CRF, preset, output path
-        if self.selected_field < 4 {
+        // 6 champs : encodeur, audio mode, CRF, preset, threads, output path
+        if self.selected_field < 5 {
             self.selected_field += 1;
         }
     }

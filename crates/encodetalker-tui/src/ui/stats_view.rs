@@ -160,7 +160,7 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let error_text = if let Some(error) = &job.error_message {
-                format!("\n  Error: {}", error)
+                format!("\n  Erreur: {}", error)
             } else {
                 String::new()
             };

@@ -57,8 +57,9 @@ async fn test_encode_test1_mkv_with_svt_av1() -> Result<()> {
         config: EncodingConfig {
             encoder: EncoderType::SvtAv1,
             encoder_params: EncoderParams {
-                crf: 63,    // CRF maximum (encodage le plus rapide)
-                preset: 13, // Preset le plus rapide pour SVT-AV1
+                crf: 63,       // CRF maximum (encodage le plus rapide)
+                preset: 13,    // Preset le plus rapide pour SVT-AV1
+                threads: None, // Auto
                 extra_params: vec![],
             },
             audio_mode: AudioMode::Opus { bitrate: 128 },

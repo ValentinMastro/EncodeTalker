@@ -27,7 +27,7 @@ fn render_encode_config_dialog(
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Configure Encoding ")
+        .title(" Configuration d'encodage ")
         .border_style(Style::default().fg(Color::Cyan));
 
     let inner = block.inner(dialog_area);
@@ -44,6 +44,7 @@ fn render_encode_config_dialog(
             Constraint::Length(3), // Audio mode
             Constraint::Length(3), // CRF
             Constraint::Length(3), // Preset
+            Constraint::Length(3), // Threads
             Constraint::Length(2), // Instructions
         ])
         .split(inner);
@@ -54,7 +55,7 @@ fn render_encode_config_dialog(
     frame.render_widget(input, chunks[0]);
 
     // Output file (éditable)
-    let output_style = if config.selected_field == 4 {
+    let output_style = if config.selected_field == 5 {
         if config.is_editing_output {
             Style::default()
                 .fg(Color::Green)
@@ -74,7 +75,7 @@ fn render_encode_config_dialog(
         let before: String = chars[..config.output_path_cursor].iter().collect();
         let after: String = chars[config.output_path_cursor..].iter().collect();
         format!("Output: {}█{}", before, after)
-    } else if config.selected_field == 4 {
+    } else if config.selected_field == 5 {
         format!("Output: {} [→ to edit]", config.output_path_string)
     } else {
         format!("Output: {}", config.output_path_string)
@@ -100,7 +101,7 @@ fn render_encode_config_dialog(
         encodetalker_common::AudioMode::Opus { bitrate } => {
             format!("Audio:   Opus {} kbps", bitrate)
         }
-        encodetalker_common::AudioMode::Copy => "Audio:   Copy".to_string(),
+        encodetalker_common::AudioMode::Copy => "Audio:   Copie".to_string(),
         encodetalker_common::AudioMode::Custom { codec, bitrate } => {
             format!("Audio:   {} {} kbps", codec, bitrate)
         }
@@ -149,16 +150,37 @@ fn render_encode_config_dialog(
     let preset = Paragraph::new(preset_text).style(preset_style);
     frame.render_widget(preset, chunks[5]);
 
+    // Threads
+    let max_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(16);
+
+    let threads_text = if let Some(threads) = config.config.encoder_params.threads {
+        format!("Threads: {} (1-{}, Auto = use all)", threads, max_threads)
+    } else {
+        format!("Threads: Auto (1-{})", max_threads)
+    };
+
+    let threads_style = if config.selected_field == 4 {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let threads = Paragraph::new(threads_text).style(threads_style);
+    frame.render_widget(threads, chunks[6]);
+
     // Instructions
     let instructions_text = if config.is_editing_output {
-        "←→: Move cursor | Char: Insert | Backspace/Del: Delete | Enter: Done | ESC: Cancel"
+        "←→: Déplacer curseur | Caractère: Insérer | Backspace/Suppr: Effacer | Entrée: Valider | ESC: Annuler"
     } else {
-        "↑↓: Navigate | ←→: Change value | Enter: Add to queue | ESC: Cancel"
+        "↑↓: Naviguer | ←→: Changer valeur | Entrée: Ajouter à la queue | ESC: Annuler"
     };
     let instructions = Paragraph::new(instructions_text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(instructions, chunks[6]);
+    frame.render_widget(instructions, chunks[7]);
 }
 
 /// Rendre le dialogue de confirmation
@@ -170,7 +192,7 @@ fn render_confirm_dialog(frame: &mut Frame, area: Rect, message: &str) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Confirm ")
+        .title(" Confirmation ")
         .border_style(Style::default().fg(Color::Yellow));
 
     let inner = block.inner(dialog_area);
@@ -188,7 +210,7 @@ fn render_confirm_dialog(frame: &mut Frame, area: Rect, message: &str) {
         .style(Style::default().fg(Color::White));
     frame.render_widget(text, chunks[0]);
 
-    let instructions = Paragraph::new("Y/Enter: Confirm | N/ESC: Cancel")
+    let instructions = Paragraph::new("O/Entrée: Confirmer | N/ESC: Annuler")
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[1]);
@@ -203,7 +225,7 @@ fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(" Error ")
+        .title(" Erreur ")
         .border_style(Style::default().fg(Color::Red));
 
     let inner = block.inner(dialog_area);
@@ -221,7 +243,7 @@ fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
         .style(Style::default().fg(Color::Red));
     frame.render_widget(text, chunks[0]);
 
-    let instructions = Paragraph::new("Press any key to close")
+    let instructions = Paragraph::new("Appuyez sur une touche pour fermer")
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(instructions, chunks[1]);

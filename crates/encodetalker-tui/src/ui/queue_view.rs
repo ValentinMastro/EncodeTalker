@@ -37,7 +37,7 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
 
             let audio = match &job.config.audio_mode {
                 encodetalker_common::AudioMode::Opus { bitrate } => format!("Opus {}k", bitrate),
-                encodetalker_common::AudioMode::Copy => "Copy".to_string(),
+                encodetalker_common::AudioMode::Copy => "Copie".to_string(),
                 encodetalker_common::AudioMode::Custom { codec, bitrate } => {
                     format!("{} {}k", codec, bitrate)
                 }

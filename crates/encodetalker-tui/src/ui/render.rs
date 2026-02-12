@@ -69,7 +69,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
         " ESC: Fermer | Enter: Valider "
     } else {
         match state.current_view {
-            View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Enter: Ouvrir | a: Ajouter | r: Rafraîchir | q: Quitter ",
+            View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Entrée: Ouvrir | a: Ajouter | r: Rafraîchir | q: Quitter ",
             View::Queue => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
             View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
             View::History => " Tab: Vue suivante | ↑↓: Naviguer | r: Réessayer | c: Effacer | C: Tout effacer | q: Quitter ",

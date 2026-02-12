@@ -206,7 +206,7 @@ impl EncodingPipeline {
         let ffmpeg_stderr_handle = std::thread::spawn(move || {
             let reader = BufReader::new(ffmpeg_stderr);
 
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 if !line.is_empty() {
                     tracing::error!("ffmpeg stderr: {}", line);
                 }
@@ -290,8 +290,14 @@ impl EncodingPipeline {
             .arg("--crf")
             .arg(job.config.encoder_params.crf.to_string())
             .arg("--preset")
-            .arg(job.config.encoder_params.preset.to_string())
-            .arg("--progress")
+            .arg(job.config.encoder_params.preset.to_string());
+
+        // Ajouter threads si spécifié
+        if let Some(threads) = job.config.encoder_params.threads {
+            cmd.arg("--lp").arg(threads.to_string());
+        }
+
+        cmd.arg("--progress")
             .arg("2") // Activer la progression sur stderr
             .arg("-b")
             .arg(output);
@@ -313,10 +319,14 @@ impl EncodingPipeline {
             .arg(job.config.encoder_params.crf.to_string())
             .arg("--cpu-used")
             .arg(job.config.encoder_params.preset.to_string())
-            .arg("--end-usage=q")
-            .arg("--ivf")
-            .arg("-o")
-            .arg(output);
+            .arg("--end-usage=q");
+
+        // Ajouter threads si spécifié
+        if let Some(threads) = job.config.encoder_params.threads {
+            cmd.arg("--threads").arg(threads.to_string());
+        }
+
+        cmd.arg("--ivf").arg("-o").arg(output);
 
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {

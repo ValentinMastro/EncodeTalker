@@ -1,5 +1,5 @@
 use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View};
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use encodetalker_common::{AudioMode, EncoderType};
 
 /// Gérer un événement clavier
@@ -12,7 +12,17 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
     // Gestion des touches globales
     match key.code {
         KeyCode::Char('q') | KeyCode::Char('Q') => {
-            state.should_quit = true;
+            // Ctrl+Q : Quitter directement sans confirmation
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                state.should_quit = true;
+                return InputAction::None;
+            }
+
+            // q simple : Demander confirmation
+            state.dialog = Some(Dialog::Confirm {
+                message: "Voulez-vous quitter l'application ?".to_string(),
+                on_confirm: ConfirmAction::Quit,
+            });
             return InputAction::None;
         }
         KeyCode::Tab => {
@@ -302,8 +312,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Left | KeyCode::Right => {
-                // Si sur field 4 et →, activer l'édition
-                if config.selected_field == 4 && key.code == KeyCode::Right {
+                // Si sur field 5 et →, activer l'édition
+                if config.selected_field == 5 && key.code == KeyCode::Right {
                     config.start_editing_output();
                 } else {
                     toggle_field_value(config, key.code == KeyCode::Right);
@@ -311,8 +321,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Enter => {
-                // Si sur field 4, activer l'édition
-                if config.selected_field == 4 {
+                // Si sur field 5, activer l'édition
+                if config.selected_field == 5 {
                     config.start_editing_output();
                     return InputAction::None;
                 }
@@ -377,6 +387,38 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             }
         }
         4 => {
+            // Threads
+            let max_threads = std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(16);
+
+            match config.config.encoder_params.threads {
+                None => {
+                    // Auto → 1 ou Auto → max
+                    if increment {
+                        config.config.encoder_params.threads = Some(1);
+                    } else {
+                        config.config.encoder_params.threads = Some(max_threads);
+                    }
+                }
+                Some(n) => {
+                    if increment {
+                        if n < max_threads {
+                            config.config.encoder_params.threads = Some(n + 1);
+                        } else {
+                            // max → Auto
+                            config.config.encoder_params.threads = None;
+                        }
+                    } else if n > 1 {
+                        config.config.encoder_params.threads = Some(n - 1);
+                    } else {
+                        // 1 → Auto
+                        config.config.encoder_params.threads = None;
+                    }
+                }
+            }
+        }
+        5 => {
             // Output path : géré par le mode édition, ne rien faire ici
         }
         _ => {}
@@ -390,7 +432,11 @@ fn handle_confirm_dialog_key(
     on_confirm: ConfirmAction,
 ) -> InputAction {
     match key.code {
-        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+        KeyCode::Char('y')
+        | KeyCode::Char('Y')
+        | KeyCode::Char('o')
+        | KeyCode::Char('O')
+        | KeyCode::Enter => {
             // Confirmer
             state.dialog = None;
 
@@ -414,6 +460,10 @@ fn handle_confirm_dialog_key(
                 }
                 ConfirmAction::ClearHistory => {
                     return InputAction::ClearHistory;
+                }
+                ConfirmAction::Quit => {
+                    state.should_quit = true;
+                    return InputAction::None;
                 }
             }
 
