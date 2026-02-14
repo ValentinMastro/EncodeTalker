@@ -45,7 +45,7 @@ chrono = { version = "0.4", features = ["serde"] }
 regex = "1.10"
 walkdir = "2.4"
 dirs = "5.0"
-reqwest = { version = "0.11", features = ["stream"] }
+reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls"] }
 
 # Internal crates
 encodetalker-common = { path = "crates/encodetalker-common" }

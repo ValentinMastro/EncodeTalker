@@ -1,7 +1,7 @@
 # Makefile pour EncodeTalker
 # Facilite la compilation, le nettoyage et le lancement du projet
 
-.PHONY: all build build-dev test test-unit test-integration clean clean-all fmt clippy run-daemon run-tui stop install help
+.PHONY: all build build-dev static test test-unit test-integration clean clean-all fmt clippy run-daemon run-tui stop install help
 
 # Variables
 CARGO := cargo
@@ -18,6 +18,7 @@ help:
 	@echo ""
 	@echo "  make build       - Compiler en mode release"
 	@echo "  make build-dev   - Compiler en mode développement"
+	@echo "  make static      - Compiler en statique (musl, portable)"
 	@echo "  make test        - Lancer tous les tests"
 	@echo "  make test-unit   - Lancer les tests unitaires (rapides)"
 	@echo "  make test-integration - Lancer les tests d'intégration (nécessite vidéo)"
@@ -42,6 +43,44 @@ build:
 build-dev:
 	@echo "🔨 Compilation en mode développement..."
 	$(CARGO) build
+
+# Compilation statique (portable, compatible toutes distributions Linux x86_64)
+static:
+	@echo "🔨 Compilation statique avec musl..."
+	@echo "   (Binaire portable, fonctionne sur toutes les distributions Linux)"
+	@echo ""
+	@echo "Vérification des dépendances musl..."
+	@if ! command -v musl-gcc >/dev/null 2>&1; then \
+		echo "❌ musl-gcc n'est pas installé"; \
+		echo "   Installez avec: sudo pacman -S musl rust-musl (Arch/Manjaro)"; \
+		echo "               ou: sudo apt install musl-tools (Ubuntu/Debian)"; \
+		exit 1; \
+	fi
+	@if ! rustc --print target-list 2>/dev/null | grep -q "x86_64-unknown-linux-musl"; then \
+		echo "❌ La target musl n'est pas disponible"; \
+		echo "   Installez avec: sudo pacman -S rust-musl (Arch/Manjaro)"; \
+		echo "               ou: rustup target add x86_64-unknown-linux-musl (rustup)"; \
+		exit 1; \
+	fi
+	@if ! ls /usr/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd-*.rlib >/dev/null 2>&1; then \
+		echo "❌ Les bibliothèques Rust musl ne sont pas installées"; \
+		echo "   Installez avec: sudo pacman -S rust-musl"; \
+		exit 1; \
+	fi
+	@echo "✅ Toutes les dépendances musl sont présentes"
+	@echo ""
+	$(CARGO) build --release --target x86_64-unknown-linux-musl
+	@echo ""
+	@echo "✅ Compilation statique terminée"
+	@echo ""
+	@echo "📦 Binaires portables disponibles dans:"
+	@echo "  target/x86_64-unknown-linux-musl/release/encodetalker-daemon"
+	@echo "  target/x86_64-unknown-linux-musl/release/encodetalker-tui"
+	@echo ""
+	@echo "Ces binaires fonctionnent sur TOUTES les distributions Linux x86_64"
+	@echo "sans dépendances dynamiques (pas de problème de version glibc)"
+	@echo ""
+	@ls -lh target/x86_64-unknown-linux-musl/release/encodetalker-{daemon,tui} 2>/dev/null || true
 
 # Tests
 test:
