@@ -1,4 +1,5 @@
 use anyhow::Result;
+use encodetalker_common::BinarySourceSettings;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -9,6 +10,8 @@ pub struct DaemonConfig {
     pub encoding: EncodingSettings,
     pub encoder: EncoderSettings,
     pub ui: UiSettings,
+    #[serde(default)]
+    pub binaries: BinarySourceSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +100,7 @@ impl Default for DaemonConfig {
                 ],
                 refresh_interval_ms: 500,
             },
+            binaries: BinarySourceSettings::default(),
         }
     }
 }

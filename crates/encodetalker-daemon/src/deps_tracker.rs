@@ -2,8 +2,7 @@ use encodetalker_common::protocol::messages::{DepsCompilationStep, DepsStatusInf
 use std::sync::{Arc, RwLock};
 
 /// État de compilation des dépendances
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 struct DepsCompilationState {
     /// Toutes les dépendances sont présentes
     all_present: bool,
@@ -18,7 +17,6 @@ struct DepsCompilationState {
     /// Nombre total de dépendances
     total_count: usize,
 }
-
 
 /// Tracker de compilation des dépendances (thread-safe)
 #[derive(Debug, Clone)]

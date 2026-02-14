@@ -2,20 +2,25 @@ use crate::{
     AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
     Result, SvtAv1Builder,
 };
-use encodetalker_common::AppPaths;
+use encodetalker_common::{AppPaths, BinarySourceSettings};
 use std::path::PathBuf;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// Gestionnaire de dépendances - coordonne téléchargement, compilation et vérification
 pub struct DependencyManager {
     paths: AppPaths,
     detector: DependencyDetector,
+    config: BinarySourceSettings,
 }
 
 impl DependencyManager {
-    pub fn new(paths: AppPaths) -> Self {
+    pub fn new(paths: AppPaths, config: BinarySourceSettings) -> Self {
         let detector = DependencyDetector::new(paths.deps_bin_dir.clone());
-        Self { paths, detector }
+        Self {
+            paths,
+            detector,
+            config,
+        }
     }
 
     /// Vérifier l'état des dépendances
@@ -114,6 +119,37 @@ impl DependencyManager {
 
     /// Obtenir le chemin d'un binaire de dépendance
     pub fn get_binary_path(&self, name: &str) -> PathBuf {
-        self.paths.deps_bin_dir.join(name)
+        // Chemin compilé local
+        let local_path = self.paths.deps_bin_dir.join(name);
+
+        // Décider de la source selon la configuration
+        let use_system = match name {
+            "ffmpeg" | "ffprobe" => self.config.ffmpeg_source == "system",
+            "SvtAv1EncApp" => self.config.svt_av1_source == "system",
+            "aomenc" => self.config.aom_source == "system",
+            _ => false,
+        };
+
+        if use_system {
+            // Essayer de trouver dans le système
+            if let Some(system_path) = DependencyDetector::find_in_system_path(name) {
+                info!("✓ Utilisation de {} système: {:?}", name, system_path);
+                return system_path;
+            } else {
+                warn!(
+                    "⚠ {} système non trouvé, fallback vers version compilée",
+                    name
+                );
+            }
+        }
+
+        // Fallback : utiliser la version compilée locale
+        if local_path.exists() {
+            info!("✓ Utilisation de {} compilé: {:?}", name, local_path);
+        } else {
+            warn!("✗ {} non trouvé (ni système ni compilé)", name);
+        }
+
+        local_path
     }
 }

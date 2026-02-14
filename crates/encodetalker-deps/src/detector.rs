@@ -88,6 +88,62 @@ impl DependencyDetector {
             .map(|o| o.status.success())
             .unwrap_or(false)
     }
+
+    /// Recherche un binaire dans le PATH système
+    pub fn find_in_system_path(binary_name: &str) -> Option<PathBuf> {
+        use std::env;
+
+        let path_var = env::var("PATH").ok()?;
+
+        for dir in path_var.split(':') {
+            let candidate = PathBuf::from(dir).join(binary_name);
+            if candidate.exists() && candidate.is_file() {
+                // Vérifier que le binaire est exécutable
+                if let Ok(metadata) = std::fs::metadata(&candidate) {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        if metadata.permissions().mode() & 0o111 != 0 {
+                            return Some(candidate);
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    return Some(candidate);
+                }
+            }
+        }
+
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_in_system_path_existing() {
+        // La plupart des systèmes ont /bin/sh
+        let result = DependencyDetector::find_in_system_path("sh");
+        assert!(result.is_some());
+        assert!(result.unwrap().exists());
+    }
+
+    #[test]
+    fn test_find_in_system_path_nonexistent() {
+        let result =
+            DependencyDetector::find_in_system_path("this_binary_definitely_does_not_exist_xyz123");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_ffmpeg_if_installed() {
+        // Test seulement si ffmpeg est installé
+        if let Some(path) = DependencyDetector::find_in_system_path("ffmpeg") {
+            assert!(path.exists());
+            assert!(path.to_string_lossy().contains("ffmpeg"));
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

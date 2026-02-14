@@ -89,9 +89,11 @@ pub fn render_loading_view(frame: &mut Frame, area: Rect, state: &LoadingState) 
 
 /// Afficher la liste des dépendances avec leur statut
 fn render_deps_list(frame: &mut Frame, area: Rect, state: &LoadingState) {
-    let deps = [("FFmpeg", "15-20 min"),
+    let deps = [
+        ("FFmpeg", "15-20 min"),
         ("SVT-AV1-PSY", "10-15 min"),
-        ("libaom", "15-20 min")];
+        ("libaom", "15-20 min"),
+    ];
 
     let items: Vec<ListItem> = deps
         .iter()
@@ -178,11 +180,13 @@ fn render_error_state(frame: &mut Frame, area: Rect, error: &str) {
     frame.render_widget(error_msg, chunks[1]);
 
     // Instructions
-    let instructions = ["Dépendances système requises:",
+    let instructions = [
+        "Dépendances système requises:",
         "",
         "sudo pacman -S base-devel cmake git nasm",
         "",
-        "Puis relancez le daemon."];
+        "Puis relancez le daemon.",
+    ];
 
     let instructions_text = instructions.join("\n");
     let instructions_widget = Paragraph::new(instructions_text)

@@ -50,7 +50,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Vérifier les dépendances
     info!("Vérification des dépendances...");
-    let dep_manager = DependencyManager::new(paths.clone());
+    info!(
+        "Configuration FFmpeg: source = {}",
+        config.binaries.ffmpeg_source
+    );
+    let dep_manager = DependencyManager::new(paths.clone(), config.binaries.clone());
     let status = dep_manager.check_status();
 
     // Créer le pipeline d'encodage (même si les binaires n'existent pas encore)
@@ -133,10 +137,16 @@ async fn main() -> anyhow::Result<()> {
 
         let paths_clone = paths.clone();
         let deps_tracker_clone = deps_tracker.clone();
+        let binaries_config = config.binaries.clone();
 
         tokio::spawn(async move {
-            match compile_deps_with_events(paths_clone.clone(), event_tx_clone, deps_tracker_clone)
-                .await
+            match compile_deps_with_events(
+                paths_clone.clone(),
+                event_tx_clone,
+                deps_tracker_clone,
+                binaries_config,
+            )
+            .await
             {
                 Ok(()) => {
                     info!("✅ Toutes les dépendances sont maintenant compilées et prêtes");
@@ -197,23 +207,32 @@ async fn compile_deps_with_events(
     paths: AppPaths,
     event_tx: mpsc::UnboundedSender<encodetalker_daemon::QueueEvent>,
     tracker: Arc<DepsCompilationTracker>,
+    binaries_config: encodetalker_common::BinarySourceSettings,
 ) -> anyhow::Result<()> {
     use encodetalker_daemon::QueueEvent;
     use encodetalker_deps::{AomBuilder, FFmpegBuilder, SvtAv1Builder};
 
     // Liste des dépendances à compiler
-    let deps_info = [(
+    let deps_info = [
+        (
             "FFmpeg",
-            !DependencyManager::new(paths.clone()).check_status().ffmpeg,
+            !DependencyManager::new(paths.clone(), binaries_config.clone())
+                .check_status()
+                .ffmpeg,
         ),
         (
             "SVT-AV1-PSY",
-            !DependencyManager::new(paths.clone()).check_status().svt_av1,
+            !DependencyManager::new(paths.clone(), binaries_config.clone())
+                .check_status()
+                .svt_av1,
         ),
         (
             "libaom",
-            !DependencyManager::new(paths.clone()).check_status().aomenc,
-        )];
+            !DependencyManager::new(paths.clone(), binaries_config.clone())
+                .check_status()
+                .aomenc,
+        ),
+    ];
 
     let total_deps = deps_info.iter().filter(|(_, missing)| *missing).count();
 

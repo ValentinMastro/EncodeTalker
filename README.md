@@ -27,7 +27,7 @@ cargo build --release
 ./target/release/encodetalker-tui
 ```
 
-The first launch will compile dependencies (~40-55 minutes). Subsequent launches are instant.
+The first launch will compile dependencies if needed. If FFmpeg is installed on your system, only SVT-AV1 and libaom need compilation (~25-35 minutes). Otherwise, all dependencies will be compiled (~40-55 minutes). Subsequent launches are instant.
 
 See [System Requirements](#-system-requirements) for build dependencies.
 
@@ -54,12 +54,17 @@ sudo dnf install @development-tools cmake git nasm
 
 ### ⏱️ First-Time Compilation
 
-The daemon automatically compiles missing dependencies:
-- **FFmpeg**: 15-20 minutes
-- **SVT-AV1-PSY**: 10-15 minutes
-- **libaom**: 15-20 minutes
+By default, EncodeTalker uses your system's FFmpeg (if available via PATH). Only specialized encoders need compilation:
+- **SVT-AV1-PSY**: 10-15 minutes (not in standard repos)
+- **libaom**: 15-20 minutes (not in standard repos)
 
-**Total: ~40-55 minutes** (one-time setup)
+**Total with system FFmpeg: ~25-35 minutes** (one-time setup)
+
+If FFmpeg is not found on your system, it will also be compiled:
+- **FFmpeg**: 15-20 minutes
+- **Total without system FFmpeg: ~40-55 minutes**
+
+You can configure which binaries to use in `config.toml` (see [Configuration](#%EF%B8%8F-configuration)).
 
 ## 🎯 Usage
 
@@ -204,6 +209,12 @@ crf = 30       # 0-63, lower = better quality
 [ui]
 file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m2ts"]
 refresh_interval_ms = 500  # UI refresh rate
+
+[binaries]
+# Binary source: "system" (use from PATH) or "compiled" (force local build)
+ffmpeg_source = "system"     # Use system FFmpeg if available (recommended)
+svt_av1_source = "compiled"  # Always compile (rarely in distro repos)
+aom_source = "compiled"      # Always compile (rarely in distro repos)
 ```
 
 ### Configuration Notes
@@ -214,6 +225,10 @@ refresh_interval_ms = 500  # UI refresh rate
   - `opus`: Transcode audio to Opus (efficient, lossy)
   - `copy`: Copy original audio streams (lossless, keeps original codec)
 - **precise_frame_count**: When `true`, probes every frame for accurate count (slower). When `false`, estimates from headers (faster, may be inaccurate for some formats).
+- **Binary sources**:
+  - `system`: Use binaries from system PATH (faster startup, no compilation needed)
+  - `compiled`: Force local compilation in `~/.local/share/encodetalker/deps/`
+  - **Recommended**: Use `system` for FFmpeg (available in all distros) and `compiled` for encoders (rarely packaged)
 
 ## 📁 Files and Directories
 
