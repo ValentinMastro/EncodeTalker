@@ -36,3 +36,25 @@ ffmpeg_source = "system"
 # dans les dépôts standards. Vous pouvez forcer "system" si vous les avez installés.
 svt_av1_source = "compiled"
 aom_source = "compiled"
+
+# Configuration des chemins (OPTIONNEL)
+# Si cette section est absente, les chemins XDG par défaut sont utilisés :
+#   - Données : ~/.local/share/encodetalker/
+#   - Dépendances : ~/.local/share/encodetalker/deps/ (~500 MB)
+#   - Socket : ~/.local/share/encodetalker/daemon.sock
+#
+# Support de ~ (home directory) et variables d'environnement ($HOME, $USER, etc.)
+# Les chemins absolus sont recommandés pour éviter toute ambiguïté
+#
+# IMPORTANT : Le daemon ET le TUI doivent utiliser le même config.toml pour
+# garantir qu'ils utilisent le même socket_path
+[paths]
+# Déplacer tout le répertoire de données (state.json, daemon.log, deps/, socket)
+# data_dir = "~/.local/share/encodetalker"
+
+# Déplacer uniquement les dépendances compilées (~500 MB)
+# Utile pour les mettre sur un SSD pour compilation plus rapide
+# deps_dir = "/mnt/ssd/encodetalker-deps"
+
+# Socket Unix personnalisé (cas d'usage : multi-utilisateurs)
+# socket_path = "/tmp/encodetalker-$USER.sock"

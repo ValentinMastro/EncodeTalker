@@ -230,6 +230,40 @@ aom_source = "compiled"      # Always compile (rarely in distro repos)
   - `compiled`: Force local compilation in `~/.local/share/encodetalker/deps/`
   - **Recommended**: Use `system` for FFmpeg (available in all distros) and `compiled` for encoders (rarely packaged)
 
+### 🗂️ Customizing Paths (Advanced)
+
+By default, EncodeTalker uses standard XDG directories:
+- **Data**: `~/.local/share/encodetalker/` (state, logs, socket)
+- **Dependencies**: `~/.local/share/encodetalker/deps/` (~500 MB of compiled binaries)
+- **Config**: `~/.config/encodetalker/`
+
+You can customize these paths by adding a `[paths]` section to your `config.toml`:
+
+```toml
+[paths]
+# Move all data to an external drive
+data_dir = "/mnt/external/encodetalker"
+
+# OR move only dependencies to SSD (faster compilation)
+deps_dir = "/mnt/ssd/encodetalker-deps"
+
+# Custom socket for multi-user setups
+socket_path = "/tmp/encodetalker-$USER.sock"
+```
+
+**Key features**:
+- ✅ **Tilde expansion**: `~` expands to your home directory
+- ✅ **Environment variables**: Use `$HOME`, `$USER`, etc.
+- ✅ **Partial customization**: Set only what you need, rest uses defaults
+- ✅ **Automatic consistency**: Daemon and TUI always use the same config
+
+**Common use cases**:
+1. **Move dependencies to SSD**: Set `deps_dir = "/mnt/ssd/encodetalker-deps"` to speed up compilation
+2. **Multi-user systems**: Use `socket_path = "/tmp/encodetalker-$USER.sock"` for per-user daemons
+3. **External storage**: Move entire data directory to larger disk with `data_dir = "/mnt/storage/encodetalker"`
+
+**Important**: Both the daemon and TUI read from `~/.config/encodetalker/config.toml`, so they're always synchronized. Restart the daemon after changing paths.
+
 ## 📁 Files and Directories
 
 EncodeTalker creates the following directories:

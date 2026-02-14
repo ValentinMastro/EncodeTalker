@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
+use super::PathsConfig;
+
 /// Chemins de l'application
 #[derive(Debug, Clone)]
 pub struct AppPaths {
@@ -25,23 +27,80 @@ pub struct AppPaths {
 }
 
 impl AppPaths {
-    /// Créer les chemins de l'application
+    /// Créer les chemins avec valeurs par défaut XDG
+    ///
+    /// Équivalent à `AppPaths::from_config(None)`
     pub fn new() -> Result<Self> {
-        let data_dir = Self::get_data_dir()?;
-        let config_dir = Self::get_config_dir()?;
+        Self::from_config(None)
+    }
 
-        let deps_dir = data_dir.join("deps");
+    /// Créer les chemins avec configuration personnalisée
+    ///
+    /// Ordre de priorité pour chaque chemin:
+    /// 1. Valeur explicite dans paths_config (ex: deps_dir = "/custom/deps")
+    /// 2. Valeur dérivée (ex: deps_dir dérivé de data_dir personnalisé)
+    /// 3. Valeur par défaut XDG
+    ///
+    /// # Arguments
+    /// * `paths_config` - Configuration optionnelle des chemins depuis [paths] du TOML
+    ///
+    /// # Exemples
+    /// ```no_run
+    /// use encodetalker_common::{AppPaths, PathsConfig};
+    ///
+    /// // Valeurs par défaut XDG
+    /// let paths = AppPaths::from_config(None).unwrap();
+    ///
+    /// // Personnalisation partielle
+    /// let config = PathsConfig {
+    ///     deps_dir: Some("/mnt/ssd/deps".to_string()),
+    ///     ..Default::default()
+    /// };
+    /// let paths = AppPaths::from_config(Some(config)).unwrap();
+    /// ```
+    pub fn from_config(paths_config: Option<PathsConfig>) -> Result<Self> {
+        let config = paths_config.unwrap_or_default();
 
+        // 1. Déterminer data_dir (custom ou défaut XDG)
+        let data_dir = if let Some(ref custom) = config.data_dir {
+            PathsConfig::expand_path(custom)
+                .context("Impossible d'expanser data_dir personnalisé")?
+        } else {
+            Self::get_default_data_dir()?
+        };
+
+        // 2. config_dir TOUJOURS depuis XDG (non configurable pour éviter confusion)
+        let config_dir = Self::get_default_config_dir()?;
+
+        // 3. Déterminer deps_dir (custom, dérivé de data_dir, ou défaut)
+        let deps_dir = if let Some(ref custom) = config.deps_dir {
+            PathsConfig::expand_path(custom)
+                .context("Impossible d'expanser deps_dir personnalisé")?
+        } else {
+            // Dérivé de data_dir (personnalisé ou XDG)
+            data_dir.join("deps")
+        };
+
+        // 4. Déterminer socket_path (custom, dérivé de data_dir, ou défaut)
+        let socket_path = if let Some(ref custom) = config.socket_path {
+            PathsConfig::expand_path(custom)
+                .context("Impossible d'expanser socket_path personnalisé")?
+        } else {
+            // Dérivé de data_dir (personnalisé ou XDG)
+            data_dir.join("daemon.sock")
+        };
+
+        // 5. Construire tous les chemins
         Ok(Self {
             config_file: config_dir.join("config.toml"),
             state_file: data_dir.join("state.json"),
-            socket_path: data_dir.join("daemon.sock"),
             log_file: data_dir.join("daemon.log"),
             deps_bin_dir: deps_dir.join("bin"),
             deps_src_dir: deps_dir.join("src"),
             data_dir,
             config_dir,
             deps_dir,
+            socket_path,
         })
     }
 
@@ -60,16 +119,16 @@ impl AppPaths {
         Ok(())
     }
 
-    /// Obtenir le répertoire de données
-    fn get_data_dir() -> Result<PathBuf> {
+    /// Obtenir le répertoire de données par défaut (XDG)
+    fn get_default_data_dir() -> Result<PathBuf> {
         let data_dir = dirs::data_local_dir()
             .context("Impossible de déterminer le répertoire de données local")?
             .join("encodetalker");
         Ok(data_dir)
     }
 
-    /// Obtenir le répertoire de configuration
-    fn get_config_dir() -> Result<PathBuf> {
+    /// Obtenir le répertoire de configuration par défaut (XDG)
+    fn get_default_config_dir() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .context("Impossible de déterminer le répertoire de configuration")?
             .join("encodetalker");
@@ -86,12 +145,129 @@ impl Default for AppPaths {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
-    fn test_paths_creation() {
+    fn test_default_paths_unchanged() {
+        // Vérifier que new() fonctionne comme avant (rétrocompatibilité)
         let paths = AppPaths::new().unwrap();
         assert!(paths.data_dir.ends_with("encodetalker"));
         assert!(paths.config_dir.ends_with("encodetalker"));
+        assert!(paths.deps_dir.ends_with("deps"));
         assert_eq!(paths.socket_path.file_name().unwrap(), "daemon.sock");
+    }
+
+    #[test]
+    fn test_from_config_none_is_same_as_new() {
+        let paths1 = AppPaths::new().unwrap();
+        let paths2 = AppPaths::from_config(None).unwrap();
+
+        assert_eq!(paths1.data_dir, paths2.data_dir);
+        assert_eq!(paths1.deps_dir, paths2.deps_dir);
+        assert_eq!(paths1.socket_path, paths2.socket_path);
+    }
+
+    #[test]
+    fn test_custom_data_dir() {
+        let config = PathsConfig {
+            data_dir: Some("/tmp/custom_data".to_string()),
+            deps_dir: None,
+            socket_path: None,
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+        assert_eq!(paths.data_dir, PathBuf::from("/tmp/custom_data"));
+
+        // Vérifier chemins dérivés
+        assert_eq!(paths.deps_dir, PathBuf::from("/tmp/custom_data/deps"));
+        assert_eq!(
+            paths.socket_path,
+            PathBuf::from("/tmp/custom_data/daemon.sock")
+        );
+        assert_eq!(
+            paths.state_file,
+            PathBuf::from("/tmp/custom_data/state.json")
+        );
+    }
+
+    #[test]
+    fn test_custom_all_paths() {
+        let config = PathsConfig {
+            data_dir: Some("/data".to_string()),
+            deps_dir: Some("/deps".to_string()),
+            socket_path: Some("/tmp/custom.sock".to_string()),
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+        assert_eq!(paths.data_dir, PathBuf::from("/data"));
+        assert_eq!(paths.deps_dir, PathBuf::from("/deps"));
+        assert_eq!(paths.socket_path, PathBuf::from("/tmp/custom.sock"));
+
+        // state_file et log_file toujours dérivés de data_dir
+        assert_eq!(paths.state_file, PathBuf::from("/data/state.json"));
+        assert_eq!(paths.log_file, PathBuf::from("/data/daemon.log"));
+    }
+
+    #[test]
+    fn test_custom_deps_only() {
+        let config = PathsConfig {
+            data_dir: None,
+            deps_dir: Some("/mnt/ssd/deps".to_string()),
+            socket_path: None,
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+
+        // data_dir et socket_path utilisent valeurs XDG
+        assert!(paths.data_dir.ends_with("encodetalker"));
+        assert!(paths.socket_path.ends_with("daemon.sock"));
+
+        // deps_dir est personnalisé
+        assert_eq!(paths.deps_dir, PathBuf::from("/mnt/ssd/deps"));
+    }
+
+    #[test]
+    fn test_tilde_expansion() {
+        let config = PathsConfig {
+            data_dir: Some("~/test_encodetalker".to_string()),
+            deps_dir: None,
+            socket_path: None,
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+        // Vérifier que ~ a été expansé
+        assert!(!paths.data_dir.to_string_lossy().contains('~'));
+        assert!(paths.data_dir.is_absolute());
+    }
+
+    #[test]
+    fn test_env_var_expansion() {
+        env::set_var("TEST_DIR", "/tmp/test");
+        let config = PathsConfig {
+            socket_path: Some("$TEST_DIR/encodetalker.sock".to_string()),
+            data_dir: None,
+            deps_dir: None,
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+        assert_eq!(
+            paths.socket_path,
+            PathBuf::from("/tmp/test/encodetalker.sock")
+        );
+    }
+
+    #[test]
+    fn test_config_dir_always_xdg() {
+        // config_dir ne peut PAS être personnalisé
+        let config = PathsConfig {
+            data_dir: Some("/custom".to_string()),
+            deps_dir: Some("/custom/deps".to_string()),
+            socket_path: Some("/custom/socket".to_string()),
+        };
+
+        let paths = AppPaths::from_config(Some(config)).unwrap();
+        // config_dir reste XDG
+        assert!(paths.config_dir.ends_with("encodetalker"));
+        assert!(paths.config_file.ends_with("config.toml"));
     }
 }

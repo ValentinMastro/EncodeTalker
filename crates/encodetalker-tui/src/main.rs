@@ -11,6 +11,7 @@ use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use encodetalker_common::AppPaths;
+use encodetalker_daemon::DaemonConfig;
 use encodetalker_tui::{
     ensure_daemon_running, handle_key_event, render_ui, AppState, InputAction, IpcClient,
 };
@@ -28,17 +29,31 @@ async fn main() -> Result<()> {
 
     info!("EncodeTalker TUI v{}", env!("CARGO_PKG_VERSION"));
 
-    // Créer les chemins de l'application
-    let paths = AppPaths::new()?;
+    // IMPORTANT: Même processus que le daemon pour garantir même socket_path
+
+    // ÉTAPE 1: Créer AppPaths par défaut pour trouver config.toml
+    let default_paths = AppPaths::new()?;
+    default_paths.ensure_dirs_exist()?;
+
+    // ÉTAPE 2: Charger config.toml (MÊME FICHIER que le daemon)
+    let config = DaemonConfig::load_or_default(&default_paths.config_file);
+    info!(
+        "Configuration chargée depuis {:?}",
+        default_paths.config_file
+    );
+
+    // ÉTAPE 3: Recréer AppPaths avec config (MÊME LOGIQUE que le daemon)
+    let paths = AppPaths::from_config(Some(config.paths.clone()))?;
     paths.ensure_dirs_exist()?;
 
-    // Chemin du binaire daemon
+    info!("Connexion au socket: {:?}", paths.socket_path);
+
+    // ÉTAPE 4: Démarrer daemon si nécessaire
     let daemon_bin = std::env::current_exe()?
         .parent()
         .unwrap()
         .join("encodetalker-daemon");
 
-    // S'assurer que le daemon est en cours d'exécution
     info!("Vérification du daemon...");
     if let Err(e) = ensure_daemon_running(&daemon_bin, &paths.socket_path).await {
         eprintln!("Échec du démarrage du daemon: {}", e);
@@ -48,7 +63,7 @@ async fn main() -> Result<()> {
         return Err(e);
     }
 
-    // Se connecter au daemon
+    // ÉTAPE 5: Se connecter au daemon
     info!("Connexion au daemon...");
     let client = IpcClient::connect(&paths.socket_path).await?;
 

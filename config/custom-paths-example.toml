@@ -1,0 +1,44 @@
+# Exemple de configuration avec chemins personnalisés
+# Copiez ce fichier vers ~/.config/encodetalker/config.toml pour l'utiliser
+
+[daemon]
+max_concurrent_jobs = 1
+log_level = "info"
+
+[encoding]
+default_encoder = "svt-av1"
+default_audio_mode = "opus"
+default_audio_bitrate = 128
+output_suffix = ".av1"
+precise_frame_count = true
+
+[encoder.svt-av1]
+preset = 6
+crf = 30
+params = ["--keyint", "240", "--tune", "3"]
+
+[encoder.aom]
+cpu-used = 4
+crf = 30
+
+[ui]
+file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"]
+refresh_interval_ms = 500
+
+[binaries]
+ffmpeg_source = "system"
+svt_av1_source = "compiled"
+aom_source = "compiled"
+
+# EXEMPLE : Chemins personnalisés
+# Décommentez et modifiez selon vos besoins
+[paths]
+# Exemple 1: Déplacer tout sur un disque externe
+# data_dir = "/mnt/external/encodetalker"
+
+# Exemple 2: Dépendances sur SSD, données sur HDD
+# data_dir = "/home/$USER/.local/share/encodetalker"
+# deps_dir = "/mnt/ssd/encodetalker-deps"
+
+# Exemple 3: Socket personnalisé pour multi-utilisateurs
+# socket_path = "/tmp/encodetalker-$USER.sock"

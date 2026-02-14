@@ -13,3 +13,4 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
+shellexpand = "3.1"

@@ -26,27 +26,40 @@ async fn main() -> anyhow::Result<()> {
 
     info!("EncodeTalker Daemon v{}", env!("CARGO_PKG_VERSION"));
 
-    // Créer les chemins de l'application
-    let paths = AppPaths::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    // ÉTAPE 1: Créer AppPaths par défaut pour trouver config.toml
+    let default_paths = AppPaths::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    default_paths
+        .ensure_dirs_exist()
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    // ÉTAPE 2: Charger config.toml (peut contenir [paths] personnalisés)
+    let config = DaemonConfig::load_or_default(&default_paths.config_file);
+    info!(
+        "Configuration chargée depuis {:?}",
+        default_paths.config_file
+    );
+
+    // ÉTAPE 3: Recréer AppPaths avec la config (chemins personnalisés si définis)
+    let paths =
+        AppPaths::from_config(Some(config.paths.clone())).map_err(|e| anyhow::anyhow!("{}", e))?;
     paths
         .ensure_dirs_exist()
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    info!("Répertoire de données: {:?}", paths.data_dir);
+    // ÉTAPE 4: Logger les chemins utilisés
+    info!("Chemins utilisés:");
+    info!("  - Données:      {:?}", paths.data_dir);
+    info!("  - Dépendances:  {:?}", paths.deps_dir);
+    info!("  - Socket:       {:?}", paths.socket_path);
+    info!("  - Configuration: {:?}", paths.config_file);
 
-    // Charger la configuration AVANT de compiler les dépendances
-    let config = DaemonConfig::load_or_default(&paths.config_file);
-    info!("Configuration chargée");
-
-    // Créer le socket Unix immédiatement pour que le TUI puisse se connecter
-    // Supprimer l'ancien socket s'il existe
+    // ÉTAPE 5: Créer le socket Unix immédiatement pour que le TUI puisse se connecter
     if paths.socket_path.exists() {
         std::fs::remove_file(&paths.socket_path)?;
     }
 
-    // Bind le socket maintenant
     let listener = tokio::net::UnixListener::bind(&paths.socket_path)?;
-    info!("Socket créé sur {:?}", paths.socket_path);
+    info!("Socket créé et en écoute");
 
     // Vérifier les dépendances
     info!("Vérification des dépendances...");

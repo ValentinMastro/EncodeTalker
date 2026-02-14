@@ -1,11 +1,14 @@
 use anyhow::Result;
-use encodetalker_common::BinarySourceSettings;
+use encodetalker_common::{BinarySourceSettings, PathsConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration du daemon
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonConfig {
+    /// Configuration des chemins (NOUVEAU - optionnel pour rétrocompatibilité)
+    #[serde(default)]
+    pub paths: PathsConfig,
     pub daemon: DaemonSettings,
     pub encoding: EncodingSettings,
     pub encoder: EncoderSettings,
@@ -17,8 +20,15 @@ pub struct DaemonConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonSettings {
     pub max_concurrent_jobs: usize,
+    /// DÉPRÉCIÉ: utiliser [paths].socket_path dans config.toml à la place
+    /// Gardé pour rétrocompatibilité mais ignoré par le daemon
+    #[serde(default = "default_socket_path")]
     pub socket_path: String,
     pub log_level: String,
+}
+
+fn default_socket_path() -> String {
+    "~/.local/share/encodetalker/daemon.sock".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +72,7 @@ pub struct UiSettings {
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
+            paths: PathsConfig::default(),
             daemon: DaemonSettings {
                 max_concurrent_jobs: 1,
                 socket_path: "~/.local/share/encodetalker/daemon.sock".to_string(),
