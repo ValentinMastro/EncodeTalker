@@ -20,6 +20,12 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
 
     // Rendre le contenu selon la vue active
     match state.current_view {
+        View::Loading => {
+            if let Some(loading_state) = &state.loading_state {
+                crate::ui::render_loading_view(frame, area, loading_state);
+            }
+            return; // Ne pas afficher header/footer pour Loading
+        }
         View::FileBrowser => crate::ui::render_file_browser(frame, chunks[1], state),
         View::Queue => crate::ui::render_queue_view(frame, chunks[1], state),
         View::Active => crate::ui::render_active_view(frame, chunks[1], state),
@@ -44,6 +50,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
         "Historique",
     ];
     let selected = match state.current_view {
+        View::Loading => 0, // Ne devrait pas arriver (Loading n'affiche pas le header)
         View::FileBrowser => 0,
         View::Queue => 1,
         View::Active => 2,
@@ -69,6 +76,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
         " ESC: Fermer | Enter: Valider "
     } else {
         match state.current_view {
+            View::Loading => " q: Quitter ", // Ne devrait pas arriver (Loading affiche son propre footer)
             View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Entrée: Ouvrir | ESPACE: Sélectionner | Ctrl+A: Tout | a: Ajouter | r: Rafraîchir | q: Quitter ",
             View::Queue => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
             View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",

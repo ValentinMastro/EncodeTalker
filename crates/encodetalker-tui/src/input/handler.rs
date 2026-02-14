@@ -4,6 +4,17 @@ use encodetalker_common::{AudioMode, EncoderType};
 
 /// Gérer un événement clavier
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
+    // Si on est en Loading, bloquer toutes les touches sauf 'q'
+    if state.current_view == View::Loading {
+        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
+            state.dialog = Some(Dialog::Confirm {
+                message: "Voulez-vous quitter l'application ?\n(La compilation continuera en arrière-plan)".to_string(),
+                on_confirm: ConfirmAction::Quit,
+            });
+        }
+        return InputAction::None;
+    }
+
     // Si un dialogue est ouvert, le gérer en priorité
     if state.dialog.is_some() {
         return handle_dialog_key(state, key);
@@ -38,6 +49,7 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
 
     // Gestion des touches spécifiques à la vue
     match state.current_view {
+        View::Loading => InputAction::None, // Ne devrait pas arriver (déjà géré au début)
         View::FileBrowser => handle_file_browser_key(state, key),
         View::Queue => handle_queue_key(state, key),
         View::Active => handle_active_key(state, key),

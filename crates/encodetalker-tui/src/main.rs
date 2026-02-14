@@ -56,6 +56,13 @@ async fn main() -> Result<()> {
     client.ping().await?;
     info!("Connecté au daemon avec succès");
 
+    // Vérifier l'état des dépendances
+    let deps_status = client.get_deps_status().await?;
+    info!(
+        "État des dépendances: all_present={}, compiling={}",
+        deps_status.all_present, deps_status.compiling
+    );
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -66,6 +73,17 @@ async fn main() -> Result<()> {
     // Créer l'état de l'application
     let start_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
     let mut app_state = AppState::new(start_dir);
+
+    // Ajuster la vue initiale selon l'état des dépendances
+    if deps_status.all_present {
+        // Dépendances prêtes, passer directement à FileBrowser
+        app_state.current_view = encodetalker_tui::View::FileBrowser;
+        app_state.loading_state = None;
+    } else if deps_status.compiling {
+        // Compilation en cours, rester en Loading et afficher l'état actuel
+        app_state.loading_state = Some(encodetalker_tui::LoadingState::from_status(deps_status));
+    }
+    // Sinon, rester en Loading avec état vide (en attente du démarrage de la compilation)
 
     // Charger les listes initiales
     match client.refresh_all().await {
@@ -276,6 +294,50 @@ async fn main() -> Result<()> {
                         app_state.dialog = Some(encodetalker_tui::Dialog::Error {
                             message: "Le daemon s'est arrêté".to_string(),
                         });
+                    }
+                    // Événements de compilation des dépendances
+                    encodetalker_common::EventPayload::DepsCompilationStarted { total_deps } => {
+                        info!(
+                            "Compilation des dépendances démarrée ({} dépendances)",
+                            total_deps
+                        );
+                        let mut loading = encodetalker_tui::LoadingState::new();
+                        loading.total_deps = total_deps;
+                        app_state.loading_state = Some(loading);
+                        app_state.current_view = encodetalker_tui::View::Loading;
+                    }
+                    encodetalker_common::EventPayload::DepsCompilationProgress {
+                        dep_name,
+                        step,
+                        ..
+                    } => {
+                        if let Some(loading) = &mut app_state.loading_state {
+                            loading.current_dep = Some(dep_name.clone());
+                            loading.current_step = Some(step);
+                        }
+                    }
+                    encodetalker_common::EventPayload::DepsCompilationItemCompleted { .. } => {
+                        if let Some(loading) = &mut app_state.loading_state {
+                            loading.completed_deps += 1;
+                        }
+                    }
+                    encodetalker_common::EventPayload::DepsCompilationCompleted => {
+                        info!("Compilation des dépendances terminée avec succès");
+                        // Attendre 2 secondes pour afficher "✅ Prêt !"
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        // Basculer vers FileBrowser
+                        app_state.current_view = encodetalker_tui::View::FileBrowser;
+                        app_state.loading_state = None;
+                        app_state.set_status("✅ Dépendances compilées avec succès");
+                    }
+                    encodetalker_common::EventPayload::DepsCompilationFailed {
+                        dep_name,
+                        error,
+                    } => {
+                        error!("Échec de compilation de {}: {}", dep_name, error);
+                        if let Some(loading) = &mut app_state.loading_state {
+                            loading.error = Some(format!("{}: {}", dep_name, error));
+                        }
                     }
                 }
             }

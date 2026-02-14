@@ -1,6 +1,7 @@
 use super::{PersistedState, Persistence};
 use crate::encoder::EncodingPipeline;
 use anyhow::Result;
+use encodetalker_common::protocol::messages::DepsCompilationStep;
 use encodetalker_common::{EncodingJob, EncodingStats, JobStatus};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -17,6 +18,26 @@ pub enum QueueEvent {
     JobCompleted(Uuid),
     JobFailed(Uuid, String),
     JobCancelled(Uuid),
+    // Événements de compilation des dépendances
+    DepsCompilationStarted {
+        total_deps: usize,
+    },
+    DepsCompilationProgress {
+        dep_name: String,
+        dep_index: usize,
+        total_deps: usize,
+        step: DepsCompilationStep,
+    },
+    DepsCompilationItemCompleted {
+        dep_name: String,
+        dep_index: usize,
+        total_deps: usize,
+    },
+    DepsCompilationCompleted,
+    DepsCompilationFailed {
+        dep_name: String,
+        error: String,
+    },
 }
 
 /// Contrôle d'un job en cours

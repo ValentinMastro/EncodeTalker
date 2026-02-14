@@ -12,8 +12,8 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use encodetalker_common::{
-    EncodingConfig, EncodingJob, Event, IpcMessage, Request, RequestPayload, Response,
-    ResponsePayload,
+    protocol::messages::DepsStatusInfo, EncodingConfig, EncodingJob, Event, IpcMessage, Request,
+    RequestPayload, Response, ResponsePayload,
 };
 
 /// Client IPC pour communiquer avec le daemon
@@ -237,6 +237,17 @@ impl IpcClient {
 
         match response.payload {
             ResponsePayload::Pong => Ok(()),
+            _ => anyhow::bail!("Réponse inattendue"),
+        }
+    }
+
+    /// Obtenir l'état de compilation des dépendances
+    pub async fn get_deps_status(&self) -> Result<DepsStatusInfo> {
+        let response = self.send_request(RequestPayload::GetDepsStatus).await?;
+
+        match response.payload {
+            ResponsePayload::DepsStatus { status } => Ok(status),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }

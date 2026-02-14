@@ -3,6 +3,34 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
 
+/// Étape de compilation d'une dépendance
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DepsCompilationStep {
+    /// Téléchargement des sources
+    Downloading,
+    /// Compilation en cours
+    Building,
+    /// Vérification du binaire
+    Verifying,
+}
+
+/// Informations sur l'état de compilation des dépendances
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepsStatusInfo {
+    /// Toutes les dépendances sont présentes et prêtes
+    pub all_present: bool,
+    /// Compilation en cours
+    pub compiling: bool,
+    /// Nom de la dépendance en cours de compilation
+    pub current_dep: Option<String>,
+    /// Étape actuelle de compilation
+    pub current_step: Option<DepsCompilationStep>,
+    /// Nombre de dépendances compilées
+    pub completed_count: usize,
+    /// Nombre total de dépendances
+    pub total_count: usize,
+}
+
 /// Requête du client vers le daemon
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Request {
@@ -52,6 +80,8 @@ pub enum RequestPayload {
     Shutdown,
     /// Ping (healthcheck)
     Ping,
+    /// Obtenir l'état de compilation des dépendances
+    GetDepsStatus,
 }
 
 /// Réponse du daemon vers le client
@@ -97,6 +127,8 @@ pub enum ResponsePayload {
     Stats { stats: EncodingStats },
     /// Pong (réponse à Ping)
     Pong,
+    /// État de compilation des dépendances
+    DepsStatus { status: DepsStatusInfo },
 }
 
 /// Événement push du daemon vers les clients (broadcast)
@@ -137,6 +169,40 @@ pub enum EventPayload {
     JobCancelled { job_id: Uuid },
     /// Daemon en cours de shutdown
     DaemonShutdown,
+    /// Compilation des dépendances démarrée
+    DepsCompilationStarted {
+        /// Nombre total de dépendances à compiler
+        total_deps: usize,
+    },
+    /// Progression de compilation d'une dépendance
+    DepsCompilationProgress {
+        /// Nom de la dépendance (ex: "FFmpeg", "SVT-AV1-PSY")
+        dep_name: String,
+        /// Index de la dépendance (0-based)
+        dep_index: usize,
+        /// Nombre total de dépendances
+        total_deps: usize,
+        /// Étape actuelle
+        step: DepsCompilationStep,
+    },
+    /// Une dépendance a été compilée avec succès
+    DepsCompilationItemCompleted {
+        /// Nom de la dépendance
+        dep_name: String,
+        /// Index de la dépendance
+        dep_index: usize,
+        /// Nombre total de dépendances
+        total_deps: usize,
+    },
+    /// Toutes les dépendances ont été compilées
+    DepsCompilationCompleted,
+    /// Erreur lors de la compilation d'une dépendance
+    DepsCompilationFailed {
+        /// Nom de la dépendance qui a échoué
+        dep_name: String,
+        /// Message d'erreur
+        error: String,
+    },
 }
 
 /// Message IPC (peut être Request, Response ou Event)

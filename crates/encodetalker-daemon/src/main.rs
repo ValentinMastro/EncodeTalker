@@ -6,8 +6,11 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
+use encodetalker_common::protocol::messages::DepsCompilationStep;
 use encodetalker_common::AppPaths;
-use encodetalker_daemon::{DaemonConfig, EncodingPipeline, IpcServer, Persistence, QueueManager};
+use encodetalker_daemon::{
+    DaemonConfig, DepsCompilationTracker, EncodingPipeline, IpcServer, Persistence, QueueManager,
+};
 use encodetalker_deps::DependencyManager;
 
 #[tokio::main]
@@ -65,6 +68,9 @@ async fn main() -> anyhow::Result<()> {
     // Channel pour les événements de la queue
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
+    // Cloner event_tx avant de le passer au QueueManager (pour l'utiliser plus tard)
+    let event_tx_clone = event_tx.clone();
+
     // Créer le queue manager
     let queue_manager = Arc::new(QueueManager::new(
         config.daemon.max_concurrent_jobs,
@@ -84,8 +90,20 @@ async fn main() -> anyhow::Result<()> {
         queue_manager_starter.run_job_starter().await;
     });
 
+    // Créer le tracker de compilation
+    let deps_tracker = Arc::new(DepsCompilationTracker::new());
+
+    // Si toutes les dépendances sont présentes, le marquer
+    if status.all_present() {
+        deps_tracker.set_all_present();
+    }
+
     // Créer le serveur IPC
-    let ipc_server = IpcServer::new(&paths.socket_path, queue_manager.clone());
+    let ipc_server = IpcServer::new(
+        &paths.socket_path,
+        queue_manager.clone(),
+        deps_tracker.clone(),
+    );
 
     // Tâche d'auto-save périodique
     let queue_manager_save = queue_manager.clone();
@@ -114,9 +132,12 @@ async fn main() -> anyhow::Result<()> {
         info!("Compilation des dépendances en arrière-plan (30-60 minutes)...");
 
         let paths_clone = paths.clone();
+        let deps_tracker_clone = deps_tracker.clone();
+
         tokio::spawn(async move {
-            let dep_mgr = DependencyManager::new(paths_clone.clone());
-            match dep_mgr.ensure_all_deps().await {
+            match compile_deps_with_events(paths_clone.clone(), event_tx_clone, deps_tracker_clone)
+                .await
+            {
                 Ok(()) => {
                     info!("✅ Toutes les dépendances sont maintenant compilées et prêtes");
                     info!("Vous pouvez maintenant ajouter des jobs d'encodage");
@@ -124,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
                 Err(e) => {
                     error!("❌ Échec de la compilation des dépendances: {}", e);
                     error!("Veuillez installer les dépendances système requises:");
-                    error!("  sudo pacman -S base-devel cmake git nasm ruby libopus libvpx");
+                    error!("  sudo pacman -S base-devel cmake git nasm");
                     error!("Le daemon continue de fonctionner mais ne pourra pas encoder");
                 }
             }
@@ -169,4 +190,180 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Daemon arrêté proprement");
     anyhow::Ok(())
+}
+
+/// Compiler les dépendances et broadcaster les événements de progression
+async fn compile_deps_with_events(
+    paths: AppPaths,
+    event_tx: mpsc::UnboundedSender<encodetalker_daemon::QueueEvent>,
+    tracker: Arc<DepsCompilationTracker>,
+) -> anyhow::Result<()> {
+    use encodetalker_daemon::QueueEvent;
+    use encodetalker_deps::{AomBuilder, FFmpegBuilder, SvtAv1Builder};
+
+    // Liste des dépendances à compiler
+    let deps_info = [(
+            "FFmpeg",
+            !DependencyManager::new(paths.clone()).check_status().ffmpeg,
+        ),
+        (
+            "SVT-AV1-PSY",
+            !DependencyManager::new(paths.clone()).check_status().svt_av1,
+        ),
+        (
+            "libaom",
+            !DependencyManager::new(paths.clone()).check_status().aomenc,
+        )];
+
+    let total_deps = deps_info.iter().filter(|(_, missing)| *missing).count();
+
+    if total_deps == 0 {
+        tracker.set_all_present();
+        return Ok(());
+    }
+
+    // Démarrer la compilation
+    tracker.start_compilation(total_deps);
+    let _ = event_tx.send(QueueEvent::DepsCompilationStarted { total_deps });
+
+    let mut dep_index = 0;
+
+    // Compiler FFmpeg si nécessaire
+    if deps_info[0].1 {
+        if let Err(e) = compile_single_dep(
+            "FFmpeg",
+            dep_index,
+            total_deps,
+            FFmpegBuilder::new(paths.deps_src_dir.clone()),
+            &paths,
+            &event_tx,
+            &tracker,
+        )
+        .await
+        {
+            tracker.fail_compilation();
+            let _ = event_tx.send(QueueEvent::DepsCompilationFailed {
+                dep_name: "FFmpeg".to_string(),
+                error: e.to_string(),
+            });
+            return Err(e);
+        }
+        dep_index += 1;
+    }
+
+    // Compiler SVT-AV1-PSY si nécessaire
+    if deps_info[1].1 {
+        if let Err(e) = compile_single_dep(
+            "SVT-AV1-PSY",
+            dep_index,
+            total_deps,
+            SvtAv1Builder::new(paths.deps_src_dir.clone()),
+            &paths,
+            &event_tx,
+            &tracker,
+        )
+        .await
+        {
+            tracker.fail_compilation();
+            let _ = event_tx.send(QueueEvent::DepsCompilationFailed {
+                dep_name: "SVT-AV1-PSY".to_string(),
+                error: e.to_string(),
+            });
+            return Err(e);
+        }
+        dep_index += 1;
+    }
+
+    // Compiler libaom si nécessaire
+    if deps_info[2].1 {
+        if let Err(e) = compile_single_dep(
+            "libaom",
+            dep_index,
+            total_deps,
+            AomBuilder::new(paths.deps_src_dir.clone()),
+            &paths,
+            &event_tx,
+            &tracker,
+        )
+        .await
+        {
+            tracker.fail_compilation();
+            let _ = event_tx.send(QueueEvent::DepsCompilationFailed {
+                dep_name: "libaom".to_string(),
+                error: e.to_string(),
+            });
+            return Err(e);
+        }
+    }
+
+    // Compilation terminée
+    tracker.finish_compilation();
+    let _ = event_tx.send(QueueEvent::DepsCompilationCompleted);
+
+    Ok(())
+}
+
+/// Compiler une seule dépendance avec événements
+async fn compile_single_dep<B: encodetalker_deps::DependencyBuilder>(
+    name: &str,
+    dep_index: usize,
+    total_deps: usize,
+    builder: B,
+    paths: &AppPaths,
+    event_tx: &mpsc::UnboundedSender<encodetalker_daemon::QueueEvent>,
+    tracker: &DepsCompilationTracker,
+) -> anyhow::Result<()> {
+    use encodetalker_daemon::QueueEvent;
+
+    // Téléchargement
+    tracker.set_current(name.to_string(), DepsCompilationStep::Downloading);
+    let _ = event_tx.send(QueueEvent::DepsCompilationProgress {
+        dep_name: name.to_string(),
+        dep_index,
+        total_deps,
+        step: DepsCompilationStep::Downloading,
+    });
+
+    info!("Téléchargement de {}...", name);
+    let source_dir = builder.download().await?;
+
+    // Compilation
+    tracker.set_current(name.to_string(), DepsCompilationStep::Building);
+    let _ = event_tx.send(QueueEvent::DepsCompilationProgress {
+        dep_name: name.to_string(),
+        dep_index,
+        total_deps,
+        step: DepsCompilationStep::Building,
+    });
+
+    info!("Compilation de {}...", name);
+    builder.build(source_dir, paths.deps_dir.clone()).await?;
+
+    // Vérification
+    tracker.set_current(name.to_string(), DepsCompilationStep::Verifying);
+    let _ = event_tx.send(QueueEvent::DepsCompilationProgress {
+        dep_name: name.to_string(),
+        dep_index,
+        total_deps,
+        step: DepsCompilationStep::Verifying,
+    });
+
+    info!("Vérification de {}...", name);
+    if !builder.verify(&paths.deps_bin_dir) {
+        return Err(anyhow::anyhow!(
+            "{} compilé mais vérification échouée",
+            name
+        ));
+    }
+
+    // Dépendance terminée
+    tracker.complete_dep();
+    let _ = event_tx.send(QueueEvent::DepsCompilationItemCompleted {
+        dep_name: name.to_string(),
+        dep_index,
+        total_deps,
+    });
+
+    info!("✅ {} compilé avec succès", name);
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use encodetalker_common::protocol::messages::{DepsCompilationStep, DepsStatusInfo};
 use encodetalker_common::{EncodingConfig, EncodingJob};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::path::{Path, PathBuf};
 /// Vue active de l'application
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
+    Loading,
     FileBrowser,
     Queue,
     Active,
@@ -14,6 +16,7 @@ pub enum View {
 impl View {
     pub fn next(&self) -> Self {
         match self {
+            View::Loading => View::Loading, // Bloquer navigation depuis Loading
             View::FileBrowser => View::Queue,
             View::Queue => View::Active,
             View::Active => View::History,
@@ -23,6 +26,7 @@ impl View {
 
     pub fn prev(&self) -> Self {
         match self {
+            View::Loading => View::Loading, // Bloquer navigation depuis Loading
             View::FileBrowser => View::History,
             View::Queue => View::FileBrowser,
             View::Active => View::Queue,
@@ -32,11 +36,81 @@ impl View {
 
     pub fn title(&self) -> &str {
         match self {
+            View::Loading => "Initialisation",
             View::FileBrowser => "Nouvel encodage",
             View::Queue => "Queue",
             View::Active => "Encodage en cours",
             View::History => "Historique",
         }
+    }
+}
+
+/// État de la vue de chargement (compilation des dépendances)
+#[derive(Debug, Clone)]
+pub struct LoadingState {
+    /// Nombre total de dépendances à compiler
+    pub total_deps: usize,
+    /// Nombre de dépendances compilées
+    pub completed_deps: usize,
+    /// Nom de la dépendance en cours de compilation
+    pub current_dep: Option<String>,
+    /// Étape actuelle de compilation
+    pub current_step: Option<DepsCompilationStep>,
+    /// Erreur de compilation
+    pub error: Option<String>,
+}
+
+impl LoadingState {
+    /// Créer un état de chargement vide (en attente)
+    pub fn new() -> Self {
+        Self {
+            total_deps: 0,
+            completed_deps: 0,
+            current_dep: None,
+            current_step: None,
+            error: None,
+        }
+    }
+
+    /// Créer depuis un DepsStatusInfo
+    pub fn from_status(status: DepsStatusInfo) -> Self {
+        Self {
+            total_deps: status.total_count,
+            completed_deps: status.completed_count,
+            current_dep: status.current_dep,
+            current_step: status.current_step,
+            error: None,
+        }
+    }
+
+    /// Calculer le pourcentage de progression
+    pub fn progress_percent(&self) -> u16 {
+        if self.total_deps == 0 {
+            0
+        } else {
+            ((self.completed_deps as f64 / self.total_deps as f64) * 100.0) as u16
+        }
+    }
+
+    /// Obtenir le texte de l'étape actuelle
+    pub fn step_text(&self) -> Option<String> {
+        match (&self.current_dep, &self.current_step) {
+            (Some(dep), Some(step)) => {
+                let step_str = match step {
+                    DepsCompilationStep::Downloading => "Téléchargement",
+                    DepsCompilationStep::Building => "Compilation",
+                    DepsCompilationStep::Verifying => "Vérification",
+                };
+                Some(format!("{}: {}...", dep, step_str))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Default for LoadingState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -46,6 +120,8 @@ pub struct AppState {
     pub current_view: View,
     /// Doit quitter l'application
     pub should_quit: bool,
+    /// État du chargement (compilation dépendances)
+    pub loading_state: Option<LoadingState>,
     /// État du file browser
     pub file_browser: FileBrowserState,
     /// Jobs en queue
@@ -65,8 +141,9 @@ pub struct AppState {
 impl AppState {
     pub fn new(start_dir: PathBuf) -> Self {
         Self {
-            current_view: View::FileBrowser,
+            current_view: View::Loading,
             should_quit: false,
+            loading_state: Some(LoadingState::new()),
             file_browser: FileBrowserState::new(start_dir),
             queue_jobs: Vec::new(),
             active_jobs: Vec::new(),
@@ -101,6 +178,7 @@ impl AppState {
     /// Obtenir la longueur de la liste active
     fn get_current_list_len(&self) -> usize {
         match self.current_view {
+            View::Loading => 0,
             View::FileBrowser => self.file_browser.entries.len(),
             View::Queue => self.queue_jobs.len(),
             View::Active => self.active_jobs.len(),

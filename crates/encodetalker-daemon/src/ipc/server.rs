@@ -1,3 +1,4 @@
+use crate::deps_tracker::DepsCompilationTracker;
 use crate::queue::{QueueEvent, QueueManager};
 use anyhow::Result;
 use encodetalker_common::{
@@ -17,13 +18,19 @@ use tracing::{error, info, warn};
 pub struct IpcServer {
     socket_path: std::path::PathBuf,
     queue_manager: Arc<QueueManager>,
+    deps_tracker: Arc<DepsCompilationTracker>,
 }
 
 impl IpcServer {
-    pub fn new(socket_path: impl AsRef<Path>, queue_manager: Arc<QueueManager>) -> Self {
+    pub fn new(
+        socket_path: impl AsRef<Path>,
+        queue_manager: Arc<QueueManager>,
+        deps_tracker: Arc<DepsCompilationTracker>,
+    ) -> Self {
         Self {
             socket_path: socket_path.as_ref().to_path_buf(),
             queue_manager,
+            deps_tracker,
         }
     }
 
@@ -79,6 +86,35 @@ impl IpcServer {
                     QueueEvent::JobCancelled(id) => {
                         Event::new(EventPayload::JobCancelled { job_id: id })
                     }
+                    QueueEvent::DepsCompilationStarted { total_deps } => {
+                        Event::new(EventPayload::DepsCompilationStarted { total_deps })
+                    }
+                    QueueEvent::DepsCompilationProgress {
+                        dep_name,
+                        dep_index,
+                        total_deps,
+                        step,
+                    } => Event::new(EventPayload::DepsCompilationProgress {
+                        dep_name,
+                        dep_index,
+                        total_deps,
+                        step,
+                    }),
+                    QueueEvent::DepsCompilationItemCompleted {
+                        dep_name,
+                        dep_index,
+                        total_deps,
+                    } => Event::new(EventPayload::DepsCompilationItemCompleted {
+                        dep_name,
+                        dep_index,
+                        total_deps,
+                    }),
+                    QueueEvent::DepsCompilationCompleted => {
+                        Event::new(EventPayload::DepsCompilationCompleted)
+                    }
+                    QueueEvent::DepsCompilationFailed { dep_name, error } => {
+                        Event::new(EventPayload::DepsCompilationFailed { dep_name, error })
+                    }
                 };
 
                 let _ = broadcast_tx_clone.send(ipc_event);
@@ -90,10 +126,12 @@ impl IpcServer {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     let queue_manager = self.queue_manager.clone();
+                    let deps_tracker = self.deps_tracker.clone();
                     let broadcast_rx = broadcast_tx.subscribe();
                     tokio::spawn(async move {
                         if let Err(e) =
-                            Self::handle_client(stream, queue_manager, broadcast_rx).await
+                            Self::handle_client(stream, queue_manager, deps_tracker, broadcast_rx)
+                                .await
                         {
                             error!("Erreur client: {}", e);
                         }
@@ -110,6 +148,7 @@ impl IpcServer {
     async fn handle_client(
         stream: UnixStream,
         queue_manager: Arc<QueueManager>,
+        deps_tracker: Arc<DepsCompilationTracker>,
         mut broadcast_rx: tokio::sync::broadcast::Receiver<Event>,
     ) -> Result<()> {
         info!("Nouveau client connecté");
@@ -129,7 +168,7 @@ impl IpcServer {
                 msg = reader.next() => {
                     match msg {
                         Some(Ok(IpcMessage::Request(request))) => {
-                            let response = Self::handle_request(&queue_manager, request).await;
+                            let response = Self::handle_request(&queue_manager, &deps_tracker, request).await;
                             writer.send(IpcMessage::Response(response)).await?;
                         }
                         Some(Ok(_)) => {
@@ -168,7 +207,11 @@ impl IpcServer {
     }
 
     /// Traiter une requête et retourner une réponse
-    async fn handle_request(queue_manager: &Arc<QueueManager>, request: Request) -> Response {
+    async fn handle_request(
+        queue_manager: &Arc<QueueManager>,
+        deps_tracker: &Arc<DepsCompilationTracker>,
+        request: Request,
+    ) -> Response {
         let request_id = request.id;
 
         match request.payload {
@@ -241,6 +284,11 @@ impl IpcServer {
             }
 
             RequestPayload::Ping => Response::new(request_id, ResponsePayload::Pong),
+
+            RequestPayload::GetDepsStatus => {
+                let status = deps_tracker.get_status();
+                Response::new(request_id, ResponsePayload::DepsStatus { status })
+            }
         }
     }
 }
