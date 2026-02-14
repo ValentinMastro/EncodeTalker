@@ -5,6 +5,8 @@ pub mod manager;
 
 // N'exporter que les types publics nécessaires, pas Result pour éviter conflits
 pub use builder::{AomBuilder, DependencyBuilder, FFmpegBuilder, SvtAv1Builder};
+#[cfg(windows)]
+pub use builder::PrecompiledFFmpegBuilder;
 pub use detector::{DependencyDetector, DependencyStatus};
 pub use downloader::Downloader;
 pub use manager::DependencyManager;

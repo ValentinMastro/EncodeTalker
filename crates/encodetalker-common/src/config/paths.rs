@@ -16,6 +16,7 @@ fn get_default_ipc_path(data_dir: &Path) -> PathBuf {
     }
     #[cfg(windows)]
     {
+        let _ = data_dir; // Utilisé seulement sur Unix
         PathBuf::from(r"\\.\pipe\encodetalker")
     }
 }

@@ -105,16 +105,20 @@ impl DependencyDetector {
             let candidate = dir.join(binary_name(binary_name_arg));
             if candidate.exists() && candidate.is_file() {
                 // Vérifier que le binaire est exécutable
-                if let Ok(metadata) = std::fs::metadata(&candidate) {
-                    #[cfg(unix)]
-                    {
+                #[cfg(unix)]
+                {
+                    if let Ok(metadata) = std::fs::metadata(&candidate) {
                         use std::os::unix::fs::PermissionsExt;
                         if metadata.permissions().mode() & 0o111 != 0 {
                             return Some(candidate);
                         }
                     }
-                    #[cfg(not(unix))]
-                    return Some(candidate);
+                }
+                #[cfg(not(unix))]
+                {
+                    if candidate.exists() {
+                        return Some(candidate);
+                    }
                 }
             }
         }

@@ -1,7 +1,9 @@
 use crate::{
-    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
-    Result, SvtAv1Builder,
+    AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, Result,
+    SvtAv1Builder,
 };
+#[cfg(unix)]
+use crate::FFmpegBuilder;
 use encodetalker_common::{binary_name, AppPaths, BinarySourceSettings};
 use std::path::PathBuf;
 use tracing::{error, info, warn};
