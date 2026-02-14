@@ -1,4 +1,5 @@
 use crate::{DependencyBuilder, DepsError, Downloader, Result};
+use encodetalker_common::binary_name;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
 const FFMPEG_URL: &str = "https://ffmpeg.org/releases/ffmpeg-6.1.tar.xz";
@@ -100,8 +101,8 @@ impl DependencyBuilder for FFmpegBuilder {
     }
 
     fn verify(&self, bin_dir: &Path) -> bool {
-        let ffmpeg = bin_dir.join("ffmpeg");
-        let ffprobe = bin_dir.join("ffprobe");
+        let ffmpeg = bin_dir.join(binary_name("ffmpeg"));
+        let ffprobe = bin_dir.join(binary_name("ffprobe"));
 
         ffmpeg.exists() && ffprobe.exists()
     }

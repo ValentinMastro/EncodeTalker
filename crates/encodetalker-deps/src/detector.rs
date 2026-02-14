@@ -1,3 +1,4 @@
+use encodetalker_common::binary_name;
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::{info, warn};
@@ -14,7 +15,7 @@ impl DependencyDetector {
 
     /// Vérifier si une dépendance est présente et fonctionnelle
     pub fn check_dependency(&self, name: &str) -> bool {
-        let bin_path = self.bin_dir.join(name);
+        let bin_path = self.bin_dir.join(binary_name(name));
 
         if !bin_path.exists() {
             warn!("{} non trouvé à {:?}", name, bin_path);
@@ -63,7 +64,8 @@ impl DependencyDetector {
     pub fn check_system_deps() -> Vec<String> {
         let mut missing = Vec::new();
 
-        let deps = [
+        #[cfg(unix)]
+        let deps: &[(&str, &[&str])] = &[
             ("gcc", &["--version"]),
             ("g++", &["--version"]),
             ("make", &["--version"]),
@@ -72,8 +74,11 @@ impl DependencyDetector {
             ("nasm", &["--version"]),
         ];
 
+        #[cfg(windows)]
+        let deps: &[(&str, &[&str])] = &[("cmake", &["--version"]), ("git", &["--version"])];
+
         for (name, args) in deps.iter() {
-            if !Self::check_command(name, *args) {
+            if !Self::check_command(name, args) {
                 missing.push(name.to_string());
             }
         }
@@ -90,13 +95,14 @@ impl DependencyDetector {
     }
 
     /// Recherche un binaire dans le PATH système
-    pub fn find_in_system_path(binary_name: &str) -> Option<PathBuf> {
+    pub fn find_in_system_path(binary_name_arg: &str) -> Option<PathBuf> {
         use std::env;
 
         let path_var = env::var("PATH").ok()?;
 
-        for dir in path_var.split(':') {
-            let candidate = PathBuf::from(dir).join(binary_name);
+        // Utiliser split_paths() qui est cross-platform (gère ':' sur Unix, ';' sur Windows)
+        for dir in env::split_paths(&path_var) {
+            let candidate = dir.join(binary_name(binary_name_arg));
             if candidate.exists() && candidate.is_file() {
                 // Vérifier que le binaire est exécutable
                 if let Ok(metadata) = std::fs::metadata(&candidate) {

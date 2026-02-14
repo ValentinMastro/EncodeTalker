@@ -1,7 +1,24 @@
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::PathsConfig;
+
+/// Ajouter le suffixe d'exécutable (.exe sur Windows, rien sur Unix)
+pub fn binary_name(name: &str) -> String {
+    format!("{}{}", name, std::env::consts::EXE_SUFFIX)
+}
+
+/// Helper pour obtenir le chemin IPC par défaut (socket Unix ou Named Pipe)
+fn get_default_ipc_path(data_dir: &Path) -> PathBuf {
+    #[cfg(unix)]
+    {
+        data_dir.join("daemon.sock")
+    }
+    #[cfg(windows)]
+    {
+        PathBuf::from(r"\\.\pipe\encodetalker")
+    }
+}
 
 /// Chemins de l'application
 #[derive(Debug, Clone)]
@@ -81,13 +98,13 @@ impl AppPaths {
             data_dir.join("deps")
         };
 
-        // 4. Déterminer socket_path (custom, dérivé de data_dir, ou défaut)
+        // 4. Déterminer socket_path (custom, dérivé de data_dir, ou défaut IPC)
         let socket_path = if let Some(ref custom) = config.socket_path {
             PathsConfig::expand_path(custom)
                 .context("Impossible d'expanser socket_path personnalisé")?
         } else {
-            // Dérivé de data_dir (personnalisé ou XDG)
-            data_dir.join("daemon.sock")
+            // Dérivé de data_dir ou chemin par défaut selon l'OS
+            get_default_ipc_path(&data_dir)
         };
 
         // 5. Construire tous les chemins

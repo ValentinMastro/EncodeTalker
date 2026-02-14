@@ -53,13 +53,12 @@ async fn main() -> anyhow::Result<()> {
     info!("  - Socket:       {:?}", paths.socket_path);
     info!("  - Configuration: {:?}", paths.config_file);
 
-    // ÉTAPE 5: Créer le socket Unix immédiatement pour que le TUI puisse se connecter
-    if paths.socket_path.exists() {
-        std::fs::remove_file(&paths.socket_path)?;
-    }
+    // ÉTAPE 5: Créer le listener IPC immédiatement pour que le TUI puisse se connecter
+    use encodetalker_common::ipc::IpcListener;
 
-    let listener = tokio::net::UnixListener::bind(&paths.socket_path)?;
-    info!("Socket créé et en écoute");
+    IpcListener::cleanup(&paths.socket_path);
+    let listener = IpcListener::bind(&paths.socket_path)?;
+    info!("Listener IPC créé et en écoute");
 
     // Vérifier les dépendances
     info!("Vérification des dépendances...");

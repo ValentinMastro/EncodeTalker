@@ -1,4 +1,5 @@
 use crate::{DependencyBuilder, DepsError, Downloader, Result};
+use encodetalker_common::binary_name;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
@@ -97,6 +98,6 @@ impl DependencyBuilder for AomBuilder {
     }
 
     fn verify(&self, bin_dir: &Path) -> bool {
-        bin_dir.join("aomenc").exists()
+        bin_dir.join(binary_name("aomenc")).exists()
     }
 }

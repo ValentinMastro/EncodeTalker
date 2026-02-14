@@ -2,7 +2,7 @@ use crate::{
     AomBuilder, DependencyBuilder, DependencyDetector, DependencyStatus, DepsError, FFmpegBuilder,
     Result, SvtAv1Builder,
 };
-use encodetalker_common::{AppPaths, BinarySourceSettings};
+use encodetalker_common::{binary_name, AppPaths, BinarySourceSettings};
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
@@ -34,7 +34,13 @@ impl DependencyManager {
         let missing_sys_deps = DependencyDetector::check_system_deps();
         if !missing_sys_deps.is_empty() {
             error!("Dépendances système manquantes: {:?}", missing_sys_deps);
+
+            #[cfg(unix)]
             error!("Installez-les avec: sudo pacman -S base-devel cmake git nasm");
+
+            #[cfg(windows)]
+            error!("Installez cmake et git, puis relancez le programme.");
+
             return Err(DepsError::Build(format!(
                 "Dépendances système manquantes: {}",
                 missing_sys_deps.join(", ")
@@ -80,8 +86,19 @@ impl DependencyManager {
 
     async fn ensure_ffmpeg(&self) -> Result<()> {
         info!("=== Installation de FFmpeg ===");
-        let builder = FFmpegBuilder::new(self.paths.deps_src_dir.clone());
-        self.build_dependency(&builder).await
+
+        #[cfg(unix)]
+        {
+            let builder = FFmpegBuilder::new(self.paths.deps_src_dir.clone());
+            self.build_dependency(&builder).await
+        }
+
+        #[cfg(windows)]
+        {
+            use crate::PrecompiledFFmpegBuilder;
+            let builder = PrecompiledFFmpegBuilder::new(self.paths.deps_src_dir.clone());
+            self.build_dependency(&builder).await
+        }
     }
 
     async fn ensure_svt_av1(&self) -> Result<()> {
@@ -119,8 +136,8 @@ impl DependencyManager {
 
     /// Obtenir le chemin d'un binaire de dépendance
     pub fn get_binary_path(&self, name: &str) -> PathBuf {
-        // Chemin compilé local
-        let local_path = self.paths.deps_bin_dir.join(name);
+        // Chemin compilé local (avec extension .exe sur Windows)
+        let local_path = self.paths.deps_bin_dir.join(binary_name(name));
 
         // Décider de la source selon la configuration
         let use_system = match name {

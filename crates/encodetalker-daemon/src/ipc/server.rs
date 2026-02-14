@@ -1,6 +1,7 @@
 use crate::deps_tracker::DepsCompilationTracker;
 use crate::queue::{QueueEvent, QueueManager};
 use anyhow::Result;
+use encodetalker_common::ipc::{IpcListener, IpcStream};
 use encodetalker_common::{
     EncodingJob, Event, EventPayload, IpcMessage, Request, RequestPayload, Response,
     ResponsePayload,
@@ -8,7 +9,6 @@ use encodetalker_common::{
 use futures::{SinkExt, StreamExt};
 use std::path::Path;
 use std::sync::Arc;
-use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
 use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
 use tokio_util::codec::LengthDelimitedCodec;
@@ -42,7 +42,7 @@ impl IpcServer {
     /// Démarrer le serveur IPC avec un listener optionnel déjà créé
     pub async fn run_with_listener(
         &self,
-        listener: Option<UnixListener>,
+        listener: Option<IpcListener>,
         mut event_rx: mpsc::UnboundedReceiver<QueueEvent>,
     ) -> Result<()> {
         let listener = if let Some(l) = listener {
@@ -52,11 +52,9 @@ impl IpcServer {
             );
             l
         } else {
-            // Supprimer l'ancien socket s'il existe
-            if self.socket_path.exists() {
-                std::fs::remove_file(&self.socket_path)?;
-            }
-            let l = UnixListener::bind(&self.socket_path)?;
+            // Créer un nouveau listener
+            IpcListener::cleanup(&self.socket_path);
+            let l = IpcListener::bind(&self.socket_path)?;
             info!("Serveur IPC en écoute sur {:?}", self.socket_path);
             l
         };
@@ -124,7 +122,7 @@ impl IpcServer {
         // Accepter les connexions
         loop {
             match listener.accept().await {
-                Ok((stream, _)) => {
+                Ok(stream) => {
                     let queue_manager = self.queue_manager.clone();
                     let deps_tracker = self.deps_tracker.clone();
                     let broadcast_rx = broadcast_tx.subscribe();
@@ -146,7 +144,7 @@ impl IpcServer {
 
     /// Gérer une connexion client
     async fn handle_client(
-        stream: UnixStream,
+        stream: IpcStream,
         queue_manager: Arc<QueueManager>,
         deps_tracker: Arc<DepsCompilationTracker>,
         mut broadcast_rx: tokio::sync::broadcast::Receiver<Event>,

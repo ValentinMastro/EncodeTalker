@@ -2,9 +2,15 @@ pub mod aom;
 pub mod ffmpeg;
 pub mod svt_av1;
 
+#[cfg(windows)]
+pub mod precompiled;
+
 pub use aom::*;
 pub use ffmpeg::*;
 pub use svt_av1::*;
+
+#[cfg(windows)]
+pub use precompiled::*;
 
 use crate::Result;
 use std::path::{Path, PathBuf};

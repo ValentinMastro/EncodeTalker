@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use encodetalker_common::ipc::IpcStream;
 use futures::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::net::UnixStream;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_serde::{formats::Bincode, Framed as SerdeFramed};
@@ -29,7 +29,7 @@ pub struct IpcClient {
 impl IpcClient {
     /// Se connecter au daemon
     pub async fn connect(socket_path: impl AsRef<Path>) -> Result<Self> {
-        let stream = UnixStream::connect(socket_path.as_ref())
+        let stream = IpcStream::connect(socket_path.as_ref())
             .await
             .context("Échec de connexion au daemon")?;
 
@@ -270,17 +270,18 @@ impl IpcClient {
 
 /// Démarrer le daemon s'il n'est pas déjà en cours d'exécution
 pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Result<()> {
-    // Vérifier si le socket existe et est accessible
-    if socket_path.exists() {
+    // Vérifier si un serveur écoute déjà sur ce socket/pipe
+    if IpcStream::server_exists(socket_path) {
         // Essayer de se connecter
-        match UnixStream::connect(socket_path).await {
+        match IpcStream::connect(socket_path).await {
             Ok(_) => {
                 info!("Daemon déjà en cours d'exécution");
                 return Ok(());
             }
             Err(_) => {
-                // Socket existe mais connexion échoue, supprimer
-                let _ = std::fs::remove_file(socket_path);
+                // Le serveur existe mais la connexion échoue, nettoyer
+                use encodetalker_common::ipc::IpcListener;
+                IpcListener::cleanup(socket_path);
             }
         }
     }
@@ -304,6 +305,14 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
                 Ok(())
             });
         }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+        cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
     }
 
     cmd.spawn().context("Échec du démarrage du daemon")?;
@@ -330,5 +339,9 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
         }
     }
 
+    #[cfg(unix)]
     anyhow::bail!("Timeout en attente du démarrage du daemon (3 minutes). Vérifiez les logs dans ~/.local/share/encodetalker/daemon.log");
+
+    #[cfg(windows)]
+    anyhow::bail!("Timeout en attente du démarrage du daemon (3 minutes). Vérifiez les logs dans %LOCALAPPDATA%\\encodetalker\\daemon.log");
 }

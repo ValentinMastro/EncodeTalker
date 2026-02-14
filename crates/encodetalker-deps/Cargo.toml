@@ -16,3 +16,6 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 
 tracing = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+zip = "2.2"

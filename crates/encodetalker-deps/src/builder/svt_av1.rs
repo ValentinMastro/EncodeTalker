@@ -1,4 +1,5 @@
 use crate::{DependencyBuilder, DepsError, Downloader, Result};
+use encodetalker_common::binary_name;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
@@ -95,6 +96,6 @@ impl DependencyBuilder for SvtAv1Builder {
     }
 
     fn verify(&self, bin_dir: &Path) -> bool {
-        bin_dir.join("SvtAv1EncApp").exists()
+        bin_dir.join(binary_name("SvtAv1EncApp")).exists()
     }
 }
