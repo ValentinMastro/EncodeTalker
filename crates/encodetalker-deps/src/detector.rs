@@ -133,8 +133,13 @@ mod tests {
 
     #[test]
     fn test_find_in_system_path_existing() {
-        // La plupart des systèmes ont /bin/sh
-        let result = DependencyDetector::find_in_system_path("sh");
+        // Test avec un binaire qui existe sur chaque plateforme
+        #[cfg(unix)]
+        let binary = "sh";
+        #[cfg(windows)]
+        let binary = "cmd";
+
+        let result = DependencyDetector::find_in_system_path(binary);
         assert!(result.is_some());
         assert!(result.unwrap().exists());
     }

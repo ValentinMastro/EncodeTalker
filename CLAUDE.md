@@ -97,9 +97,9 @@ RUST_LOG=encodetalker_daemon::encoder=debug ./target/release/encodetalker-daemon
 
 ## 📦 Dépendances
 
-### Dépendances compilées automatiquement
+### Dépendances compilées/téléchargées automatiquement
 
-Le projet compile ces dépendances localement dans `~/.local/share/encodetalker/deps/` :
+**Linux** : Le projet compile ces dépendances localement dans `~/.local/share/encodetalker/deps/` :
 
 1. **FFmpeg** (15-20 min) - Demux, muxing, extraction audio
 2. **SVT-AV1-PSY** (10-15 min) - Encodeur AV1 optimisé (par défaut)
@@ -107,14 +107,31 @@ Le projet compile ces dépendances localement dans `~/.local/share/encodetalker/
 
 **Temps total de compilation : ~40-55 minutes**
 
+**Windows** : Les binaires pré-compilés sont téléchargés automatiquement dans `%LOCALAPPDATA%\encodetalker\deps\` :
+
+1. **FFmpeg** (~2-3 min download) - Depuis GitHub Releases
+2. **SVT-AV1-PSY** - À venir
+3. **libaom** - À venir
+
+**Temps total : ~2-3 minutes** (téléchargement uniquement)
+
 ### Dépendances système requises
 
+**Linux** :
 ```bash
 # Sur Arch/Manjaro
 sudo pacman -S base-devel cmake git nasm
 
 # Sur Ubuntu/Debian
 sudo apt install build-essential cmake git nasm
+```
+
+**Windows** :
+```powershell
+# Installer Git et CMake via Chocolatey
+choco install git cmake
+
+# Ou télécharger manuellement depuis les sites officiels
 ```
 
 ## 🎯 Conventions de code
@@ -319,7 +336,8 @@ cargo build --release
 - [ ] Système de templates/presets
 - [ ] API REST pour contrôle distant
 - [ ] Interface web
-- [ ] Support macOS/Windows
+- [x] Support Windows (✅ implémenté)
+- [ ] Support macOS
 - [ ] Notifications système
 - [ ] Statistiques globales
 

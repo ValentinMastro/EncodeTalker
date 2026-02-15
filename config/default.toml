@@ -38,23 +38,37 @@ svt_av1_source = "compiled"
 aom_source = "compiled"
 
 # Configuration des chemins (OPTIONNEL)
-# Si cette section est absente, les chemins XDG par défaut sont utilisés :
+# Si cette section est absente, les chemins par défaut sont utilisés :
+#
+# Linux/Unix :
 #   - Données : ~/.local/share/encodetalker/
 #   - Dépendances : ~/.local/share/encodetalker/deps/ (~500 MB)
 #   - Socket : ~/.local/share/encodetalker/daemon.sock
+#
+# Windows :
+#   - Données : %LOCALAPPDATA%\encodetalker\
+#   - Dépendances : %LOCALAPPDATA%\encodetalker\deps\
+#   - IPC : \\.\pipe\encodetalker (Named Pipe, non configurable)
 #
 # Support de ~ (home directory) et variables d'environnement ($HOME, $USER, etc.)
 # Les chemins absolus sont recommandés pour éviter toute ambiguïté
 #
 # IMPORTANT : Le daemon ET le TUI doivent utiliser le même config.toml pour
-# garantir qu'ils utilisent le même socket_path
+# garantir qu'ils utilisent les mêmes chemins
 [paths]
 # Déplacer tout le répertoire de données (state.json, daemon.log, deps/, socket)
+# Linux/Unix :
 # data_dir = "~/.local/share/encodetalker"
+# Windows :
+# data_dir = "C:\\Users\\YourName\\encodetalker"
 
-# Déplacer uniquement les dépendances compilées (~500 MB)
-# Utile pour les mettre sur un SSD pour compilation plus rapide
+# Déplacer uniquement les dépendances compilées/téléchargées
+# Utile pour les mettre sur un SSD rapide
+# Linux :
 # deps_dir = "/mnt/ssd/encodetalker-deps"
+# Windows :
+# deps_dir = "D:\\encodetalker-deps"
 
-# Socket Unix personnalisé (cas d'usage : multi-utilisateurs)
+# Socket Unix personnalisé (Linux/Unix uniquement)
+# Note : Sur Windows, le Named Pipe (\\.\pipe\encodetalker) n'est pas configurable
 # socket_path = "/tmp/encodetalker-$USER.sock"

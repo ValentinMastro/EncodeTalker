@@ -50,19 +50,31 @@ sudo apt install build-essential cmake git nasm
 sudo dnf install @development-tools cmake git nasm
 ```
 
-**Note**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required for runtime!** 🎉
+### Windows
+```powershell
+# Install Git and CMake via Chocolatey
+choco install git cmake
 
-### ⏱️ First-Time Compilation
+# Or download manually:
+# - Git: https://git-scm.com/download/win
+# - CMake: https://cmake.org/download/
+```
 
-By default, EncodeTalker uses your system's FFmpeg (if available via PATH). Only specialized encoders need compilation:
+**Note**:
+- **Linux**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required for runtime!** 🎉
+- **Windows**: Pre-compiled binaries are automatically downloaded to `%LOCALAPPDATA%\encodetalker\deps\` - **no compilation needed!** ⚡
+
+### ⏱️ First-Time Setup
+
+**Linux**: By default, EncodeTalker uses your system's FFmpeg (if available via PATH). Only specialized encoders need compilation:
 - **SVT-AV1-PSY**: 10-15 minutes (not in standard repos)
 - **libaom**: 15-20 minutes (not in standard repos)
+- **Total with system FFmpeg: ~25-35 minutes** (one-time setup)
 
-**Total with system FFmpeg: ~25-35 minutes** (one-time setup)
-
-If FFmpeg is not found on your system, it will also be compiled:
-- **FFmpeg**: 15-20 minutes
+If FFmpeg is not found on your system, it will also be compiled (~15-20 minutes).
 - **Total without system FFmpeg: ~40-55 minutes**
+
+**Windows**: Pre-compiled binaries are automatically downloaded (~2-3 minutes depending on network speed) ⚡
 
 You can configure which binaries to use in `config.toml` (see [Configuration](#%EF%B8%8F-configuration)).
 
@@ -77,7 +89,7 @@ You can configure which binaries to use in `config.toml` (see [Configuration](#%
 The TUI will:
 1. Check if the daemon is running
 2. Auto-start the daemon if needed
-3. Connect via IPC (Unix socket)
+3. Connect via IPC (Unix socket on Linux, Named Pipe on Windows)
 4. Display the interactive interface
 
 ### Basic Navigation
@@ -337,8 +349,8 @@ EncodeTalker is actively developed. Current limitations:
 
 - **Manual stream selection not implemented**: All audio/subtitle streams are included by default
 - **Single encoder instance per job**: No multi-pass encoding yet
-- **No remote API**: Daemon only accessible via local Unix socket
-- **Linux-only**: Not tested on macOS/Windows (PRs welcome!)
+- **No remote API**: Daemon only accessible via local IPC
+- **Limited platform support**: Linux and Windows supported, macOS not tested (PRs welcome!)
 - **Limited audio options**: Only Opus encoding or copy (no other codecs)
 - **No video filters**: Cropping, resizing, denoising not yet implemented
 - **No preset system**: Cannot save/load encoding configurations

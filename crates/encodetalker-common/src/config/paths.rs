@@ -172,7 +172,12 @@ mod tests {
         assert!(paths.data_dir.ends_with("encodetalker"));
         assert!(paths.config_dir.ends_with("encodetalker"));
         assert!(paths.deps_dir.ends_with("deps"));
+
+        // Sur Unix, socket_path est un fichier, sur Windows c'est un Named Pipe
+        #[cfg(unix)]
         assert_eq!(paths.socket_path.file_name().unwrap(), "daemon.sock");
+        #[cfg(windows)]
+        assert!(paths.socket_path.to_string_lossy().contains("encodetalker"));
     }
 
     #[test]
@@ -198,10 +203,16 @@ mod tests {
 
         // Vérifier chemins dérivés
         assert_eq!(paths.deps_dir, PathBuf::from("/tmp/custom_data/deps"));
+
+        // Socket path est dérivé sur Unix, mais Named Pipe fixe sur Windows
+        #[cfg(unix)]
         assert_eq!(
             paths.socket_path,
             PathBuf::from("/tmp/custom_data/daemon.sock")
         );
+        #[cfg(windows)]
+        assert!(paths.socket_path.to_string_lossy().contains("encodetalker"));
+
         assert_eq!(
             paths.state_file,
             PathBuf::from("/tmp/custom_data/state.json")
@@ -238,7 +249,11 @@ mod tests {
 
         // data_dir et socket_path utilisent valeurs XDG
         assert!(paths.data_dir.ends_with("encodetalker"));
+
+        #[cfg(unix)]
         assert!(paths.socket_path.ends_with("daemon.sock"));
+        #[cfg(windows)]
+        assert!(paths.socket_path.to_string_lossy().contains("encodetalker"));
 
         // deps_dir est personnalisé
         assert_eq!(paths.deps_dir, PathBuf::from("/mnt/ssd/deps"));

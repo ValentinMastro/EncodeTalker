@@ -309,6 +309,7 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
 
     #[cfg(windows)]
     {
+        #[allow(unused_imports)]
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         const DETACHED_PROCESS: u32 = 0x00000008;
@@ -325,7 +326,7 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
     // La première fois, le daemon compile les dépendances avant de créer le socket
     for i in 0..1800 {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        if socket_path.exists() {
+        if IpcStream::server_exists(socket_path) {
             // Attendre un peu plus pour que le daemon soit prêt
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             info!("Daemon démarré et prêt");

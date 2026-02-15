@@ -201,9 +201,12 @@ async fn main() -> anyhow::Result<()> {
         error!("Échec de la sauvegarde finale: {}", e);
     }
 
-    // Nettoyer le socket
-    if paths.socket_path.exists() {
-        let _ = std::fs::remove_file(&paths.socket_path);
+    // Nettoyer le socket (Unix uniquement, Windows Named Pipes se nettoient automatiquement)
+    #[cfg(unix)]
+    {
+        if paths.socket_path.exists() {
+            let _ = std::fs::remove_file(&paths.socket_path);
+        }
     }
 
     // Arrêter les tâches
