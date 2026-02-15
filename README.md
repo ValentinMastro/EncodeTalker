@@ -8,7 +8,7 @@ A Rust-based TUI wrapper around FFmpeg for managing AV1 video encoding with a pe
 - **Persistent Encoding Jobs**: Jobs continue even if you close the TUI - reconnect anytime
 - **Intelligent Queue Management**: Automatic job scheduling with configurable concurrency
 - **Batch File Selection**: Select multiple files with Space, Ctrl+A (select all), Ctrl+D (deselect all)
-- **Automatic Dependency Building**: Compiles FFmpeg, SVT-AV1-PSY, and libaom locally (no sudo required!)
+- **Easy Dependency Management**: Simple script to install FFmpeg, SVT-AV1-PSY, and libaom locally (no sudo required!)
 - **Real-Time Progress Tracking**: Live FPS, ETA, and progress bars for each encoding job
 - **Flexible Encoding Pipeline**: Support for SVT-AV1 and libaom encoders
 - **Wide Format Support**: Handles .mp4, .mkv, .avi, .mov, .webm, .m2ts (BDMV) and more
@@ -19,17 +19,40 @@ A Rust-based TUI wrapper around FFmpeg for managing AV1 video encoding with a pe
 
 ## 🚀 Quick Start
 
-```bash
-# Build the project
-cargo build --release
+### 1. Install System Dependencies
 
-# Launch the TUI (automatically starts daemon if needed)
-./target/release/encodetalker-tui
+See [System Requirements](#-system-requirements) for your platform.
+
+### 2. Install Encoding Dependencies
+
+**Install all dependencies** (recommended):
+```bash
+./INSTALL_DEPENDENCIES.sh
 ```
 
-The first launch will compile dependencies if needed. If FFmpeg is installed on your system, only SVT-AV1 and libaom need compilation (~25-35 minutes). Otherwise, all dependencies will be compiled (~40-55 minutes). Subsequent launches are instant.
+**Or install selectively**:
+```bash
+./INSTALL_DEPENDENCIES.sh --ffmpeg    # FFmpeg only
+./INSTALL_DEPENDENCIES.sh --svt-av1   # SVT-AV1-PSY only
+./INSTALL_DEPENDENCIES.sh --aomenc    # libaom only
+```
 
-See [System Requirements](#-system-requirements) for build dependencies.
+**Time required**:
+- **Linux**: ~60 minutes (compilation from source)
+- **Windows**: ~3 minutes (download pre-compiled binaries)
+
+### 3. Build EncodeTalker
+
+```bash
+cargo build --release
+```
+
+### 4. Launch the TUI
+
+```bash
+# Launch the TUI (automatically starts daemon)
+./target/release/encodetalker-tui
+```
 
 ## 📦 System Requirements
 
@@ -61,22 +84,33 @@ choco install git cmake
 ```
 
 **Note**:
-- **Linux**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required for runtime!** 🎉
-- **Windows**: Pre-compiled binaries are automatically downloaded to `%LOCALAPPDATA%\encodetalker\deps\` - **no compilation needed!** ⚡
+- **Linux**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required!** 🎉
+- **Windows**: Pre-compiled binaries are downloaded to `%LOCALAPPDATA%\encodetalker\deps\` - **no compilation needed!** ⚡
 
-### ⏱️ First-Time Setup
+### ⏱️ Installation Time
 
-**Linux**: By default, EncodeTalker uses your system's FFmpeg (if available via PATH). Only specialized encoders need compilation:
-- **SVT-AV1-PSY**: 10-15 minutes (not in standard repos)
-- **libaom**: 15-20 minutes (not in standard repos)
-- **Total with system FFmpeg: ~25-35 minutes** (one-time setup)
+The `INSTALL_DEPENDENCIES.sh` script handles all dependency installation automatically:
 
-If FFmpeg is not found on your system, it will also be compiled (~15-20 minutes).
-- **Total without system FFmpeg: ~40-55 minutes**
+**Linux** (compilation from source):
+- **FFmpeg**: ~15-20 minutes
+- **SVT-AV1-PSY**: ~10-15 minutes
+- **libaom**: ~15-20 minutes
+- **Total: ~40-55 minutes** (one-time setup)
 
-**Windows**: Pre-compiled binaries are automatically downloaded (~2-3 minutes depending on network speed) ⚡
+**Windows** (pre-compiled binaries download):
+- **All dependencies**: ~2-3 minutes (network-dependent)
 
-You can configure which binaries to use in `config.toml` (see [Configuration](#%EF%B8%8F-configuration)).
+**Selective installation**:
+```bash
+# Install only what you need
+./INSTALL_DEPENDENCIES.sh --ffmpeg --svt-av1  # Skip libaom
+```
+
+**Verification**:
+```bash
+# Check if dependencies are installed
+./CHECK_INSTALLED_DEPENDENCIES.sh
+```
 
 ## 🎯 Usage
 
@@ -133,10 +167,12 @@ This makes it easy to encode entire directories or specific sets of files with t
 ./target/release/encodetalker-daemon
 ```
 
+**Important**: Dependencies must be installed first via `./INSTALL_DEPENDENCIES.sh`. The daemon will exit with a clear error message if dependencies are missing.
+
 The daemon will:
-- Check for dependencies in `~/.local/share/encodetalker/deps/bin/`
-- Compile missing dependencies (if needed)
-- Listen on Unix socket: `~/.local/share/encodetalker/daemon.sock`
+- Verify all dependencies are installed in `~/.local/share/encodetalker/deps/bin/`
+- Listen on Unix socket (Linux): `~/.local/share/encodetalker/daemon.sock`
+- Listen on Named Pipe (Windows): `\\.\pipe\encodetalker`
 - Load saved state (queue, history)
 
 ## ⌨️ Keyboard Shortcuts
@@ -221,12 +257,6 @@ crf = 30       # 0-63, lower = better quality
 [ui]
 file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm", ".m2ts"]
 refresh_interval_ms = 500  # UI refresh rate
-
-[binaries]
-# Binary source: "system" (use from PATH) or "compiled" (force local build)
-ffmpeg_source = "system"     # Use system FFmpeg if available (recommended)
-svt_av1_source = "compiled"  # Always compile (rarely in distro repos)
-aom_source = "compiled"      # Always compile (rarely in distro repos)
 ```
 
 ### Configuration Notes
@@ -236,11 +266,7 @@ aom_source = "compiled"      # Always compile (rarely in distro repos)
 - **Audio modes**:
   - `opus`: Transcode audio to Opus (efficient, lossy)
   - `copy`: Copy original audio streams (lossless, keeps original codec)
-- **precise_frame_count**: When `true`, probes every frame for accurate count (slower). When `false`, estimates from headers (faster, may be inaccurate for some formats).
-- **Binary sources**:
-  - `system`: Use binaries from system PATH (faster startup, no compilation needed)
-  - `compiled`: Force local compilation in `~/.local/share/encodetalker/deps/`
-  - **Recommended**: Use `system` for FFmpeg (available in all distros) and `compiled` for encoders (rarely packaged)
+- **precise_frame_count**: When `true`, probes every frame for accurate count (slower). When `false`, estimates from headers (faster, may be inaccurate for some formats)
 
 ### 🗂️ Customizing Paths (Advanced)
 

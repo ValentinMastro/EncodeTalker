@@ -11,7 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 encodetalker-common = { workspace = true }
-encodetalker-deps = { workspace = true }
 
 tokio = { workspace = true }
 tokio-util = { workspace = true }

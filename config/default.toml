@@ -25,18 +25,6 @@ crf = 30
 file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"]
 refresh_interval_ms = 500
 
-# Configuration des binaires : utiliser les versions système ou compilées
-# Options : "system" (utiliser via PATH) ou "compiled" (forcer compilation locale)
-[binaries]
-# Par défaut, utiliser FFmpeg système s'il est disponible (plus rapide au démarrage)
-# Si FFmpeg système n'est pas trouvé, il sera compilé automatiquement
-ffmpeg_source = "system"
-
-# SVT-AV1-PSY et libaom sont toujours compilés localement car rarement disponibles
-# dans les dépôts standards. Vous pouvez forcer "system" si vous les avez installés.
-svt_av1_source = "compiled"
-aom_source = "compiled"
-
 # Configuration des chemins (OPTIONNEL)
 # Si cette section est absente, les chemins par défaut sont utilisés :
 #

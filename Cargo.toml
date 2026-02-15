@@ -3,7 +3,6 @@ members = [
     "crates/encodetalker-common",
     "crates/encodetalker-daemon",
     "crates/encodetalker-tui",
-    "crates/encodetalker-deps",
 ]
 resolver = "2"
 
@@ -50,4 +49,3 @@ reqwest = { version = "0.11", default-features = false, features = ["stream", "r
 # Internal crates
 encodetalker-common = { path = "crates/encodetalker-common" }
 encodetalker-daemon = { path = "crates/encodetalker-daemon" }
-encodetalker-deps = { path = "crates/encodetalker-deps" }
