@@ -1,4 +1,5 @@
 use crate::app::AppState;
+use chrono::Local;
 use encodetalker_common::JobStatus;
 use ratatui::{prelude::*, widgets::*};
 
@@ -159,6 +160,16 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
                 "--:--:--".to_string()
             };
 
+            let started_text = match job.started_at {
+                Some(dt) => dt.with_timezone(&Local).format("%d/%m/%Y %H:%M:%S").to_string(),
+                None => "--".to_string(),
+            };
+
+            let finished_text = match job.finished_at {
+                Some(dt) => dt.with_timezone(&Local).format("%d/%m/%Y %H:%M:%S").to_string(),
+                None => "--".to_string(),
+            };
+
             let error_text = if let Some(error) = &job.error_message {
                 format!("\n  Erreur: {}", error)
             } else {
@@ -166,8 +177,8 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let text = format!(
-                "{} {} | Duration: {}{}",
-                status_icon, filename, duration_text, error_text
+                "{} {} | Durée: {}\n  Début: {}\n  Fin:   {}{}",
+                status_icon, filename, duration_text, started_text, finished_text, error_text
             );
 
             ListItem::new(text).style(Style::default().fg(status_color))
