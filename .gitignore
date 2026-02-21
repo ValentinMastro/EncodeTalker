@@ -42,5 +42,5 @@ state.json
 *.ssa
 *.vtt
 
-# dépendences à installer
-./dependencies
+# dépendances à installer
+.dependencies/
