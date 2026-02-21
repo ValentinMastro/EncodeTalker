@@ -36,7 +36,10 @@ async fn check_dependencies_installed() -> anyhow::Result<()> {
         );
     }
 
-    info!("Vérification des dépendances avec le script: {}", script_path.display());
+    info!(
+        "Vérification des dépendances avec le script: {}",
+        script_path.display()
+    );
 
     // Exécuter le script
     let output = Command::new("bash")

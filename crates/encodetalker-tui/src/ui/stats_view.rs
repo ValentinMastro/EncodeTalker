@@ -161,12 +161,18 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let started_text = match job.started_at {
-                Some(dt) => dt.with_timezone(&Local).format("%d/%m/%Y %H:%M:%S").to_string(),
+                Some(dt) => dt
+                    .with_timezone(&Local)
+                    .format("%d/%m/%Y %H:%M:%S")
+                    .to_string(),
                 None => "--".to_string(),
             };
 
             let finished_text = match job.finished_at {
-                Some(dt) => dt.with_timezone(&Local).format("%d/%m/%Y %H:%M:%S").to_string(),
+                Some(dt) => dt
+                    .with_timezone(&Local)
+                    .format("%d/%m/%Y %H:%M:%S")
+                    .to_string(),
                 None => "--".to_string(),
             };
 

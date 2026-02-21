@@ -71,9 +71,7 @@ fn test_tui_encode_test1_svtav1_preset13() {
         daemon.display()
     );
 
-    let input = project_root()
-        .join("vidéos_de_test")
-        .join("test1.mkv");
+    let input = project_root().join("vidéos_de_test").join("test1.mkv");
     assert!(
         input.exists(),
         "Vidéo de test introuvable : {}",
@@ -112,7 +110,9 @@ fn test_tui_encode_test1_svtav1_preset13() {
     sleep(Duration::from_millis(300));
 
     // Enter : ouvrir le dialogue de configuration d'encodage
-    session.send(KEY_ENTER).expect("Envoi Enter (ouvrir config)");
+    session
+        .send(KEY_ENTER)
+        .expect("Envoi Enter (ouvrir config)");
     sleep(Duration::from_millis(500));
 
     // ↓×3 : naviguer du champ 0 (Encoder) au champ 3 (Preset)
@@ -128,12 +128,16 @@ fn test_tui_encode_test1_svtav1_preset13() {
     // →×7 : augmenter le preset de 6 (défaut) à 13
     // Preset 13 = encodage le plus rapide pour SVT-AV1
     for _ in 0..7 {
-        session.send(KEY_RIGHT).expect("Envoi → (incrémenter preset)");
+        session
+            .send(KEY_RIGHT)
+            .expect("Envoi → (incrémenter preset)");
         sleep(Duration::from_millis(100));
     }
 
     // Enter : valider la configuration et lancer l'encodage
-    session.send(KEY_ENTER).expect("Envoi Enter (soumettre job)");
+    session
+        .send(KEY_ENTER)
+        .expect("Envoi Enter (soumettre job)");
     sleep(Duration::from_millis(500));
 
     // --- Attendre la fin de l'encodage (timeout 5 minutes) ---
@@ -147,7 +151,10 @@ fn test_tui_encode_test1_svtav1_preset13() {
 
     loop {
         if output.exists() {
-            println!("Fichier output détecté après {:?}", deadline - Instant::now());
+            println!(
+                "Fichier output détecté après {:?}",
+                deadline - Instant::now()
+            );
             break;
         }
 
@@ -162,7 +169,11 @@ fn test_tui_encode_test1_svtav1_preset13() {
     }
 
     // --- Vérifications ---
-    assert!(output.exists(), "Le fichier output n'existe pas : {}", output.display());
+    assert!(
+        output.exists(),
+        "Le fichier output n'existe pas : {}",
+        output.display()
+    );
 
     let size = output
         .metadata()
@@ -174,7 +185,11 @@ fn test_tui_encode_test1_svtav1_preset13() {
         output.display()
     );
 
-    println!("✅ Encodage réussi : {} ({} octets)", output.display(), size);
+    println!(
+        "✅ Encodage réussi : {} ({} octets)",
+        output.display(),
+        size
+    );
 
     // --- Quitter le TUI proprement ---
     session.send(b"q").ok();
