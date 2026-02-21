@@ -132,6 +132,11 @@ clean-all: clean
 		echo "   Suppression de $(DATA_DIR)/"; \
 		rm -rf "$(DATA_DIR)"; \
 	fi
+	@echo "🧹 Suppression des dépendances locales (.dependencies/)..."
+	@if [ -d ".dependencies" ]; then \
+		echo "   Suppression de .dependencies/"; \
+		rm -rf ".dependencies"; \
+	fi
 	@echo "🧹 Suppression des fichiers .log..."
 	@find . -name "*.log" -type f -delete 2>/dev/null || true
 	@echo "🧹 Arrêt du daemon si en cours..."
