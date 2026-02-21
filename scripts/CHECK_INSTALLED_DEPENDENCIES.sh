@@ -30,6 +30,24 @@ if [[ -f "$CONFIG_FILE" ]]; then
     fi
 fi
 
+# Fonction 0 : Vérifier libopus
+check_opus() {
+    echo "Checking libopus..."
+
+    local status="✗"
+
+    if [[ -f "$DEPS_DIR/lib/libopus.a" ]] || [[ -f "$DEPS_DIR/lib/libopus.so" ]]; then
+        status="✓"
+        DEPS_OK=$((DEPS_OK + 1))
+        echo "  $status libopus: $DEPS_DIR/lib/"
+        return 0
+    fi
+
+    DEPS_MISSING=$((DEPS_MISSING + 1))
+    echo "  $status libopus: MISSING"
+    echo "     Expected at: $DEPS_DIR/lib/libopus.a"
+}
+
 # Fonction 1 : Vérifier FFmpeg + FFprobe
 check_ffmpeg() {
     echo "Checking FFmpeg..."
@@ -117,14 +135,15 @@ main() {
     fi
 
     echo "Compiled Dependencies:"
+    check_opus
     check_ffmpeg
     check_svt_av1
     check_aomenc
 
     echo ""
     echo "=== Summary ==="
-    echo "  Dependencies OK:      $DEPS_OK/3"
-    echo "  Dependencies missing: $DEPS_MISSING/3"
+    echo "  Dependencies OK:      $DEPS_OK/4"
+    echo "  Dependencies missing: $DEPS_MISSING/4"
 
     if [[ $DEPS_MISSING -eq 0 ]]; then
         exit 0

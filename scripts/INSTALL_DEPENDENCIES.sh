@@ -32,6 +32,8 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # URLs sources (même que dans downloader.rs)
+OPUS_VERSION="1.6.1"
+OPUS_URL="https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"
 FFMPEG_VERSION="8.0.1"
 FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
@@ -144,6 +146,47 @@ clone_git_repo() {
 }
 
 #######################################
+# Compilation libopus (Linux)
+#######################################
+install_opus() {
+    echo -e "${YELLOW}=== Installing libopus ===${NC}"
+
+    local opus_src="$DEPS_SRC/opus-${OPUS_VERSION}"
+
+    # Vérifier si déjà installé
+    if [[ -f "$DEPS_DIR/lib/libopus.a" ]] || [[ -f "$DEPS_DIR/lib/libopus.so" ]]; then
+        echo -e "${GREEN}✓ libopus already installed${NC}"
+        return 0
+    fi
+
+    # Télécharger sources
+    download_tarball "$OPUS_URL" "$opus_src"
+
+    # Compiler
+    echo "  Configuring libopus..."
+    cd "$opus_src"
+
+    ./configure \
+        --prefix="$DEPS_DIR" \
+        --disable-doc \
+        --disable-extra-programs
+
+    echo "  Building libopus with $NCPUS cores..."
+    make -j"$NCPUS"
+
+    echo "  Installing libopus..."
+    make install
+
+    # Vérifier installation
+    if [[ -f "$DEPS_DIR/lib/libopus.a" ]] || [[ -f "$DEPS_DIR/lib/libopus.so" ]]; then
+        echo -e "${GREEN}✓ libopus compiled successfully${NC}"
+    else
+        echo -e "${RED}✗ libopus compilation failed${NC}"
+        exit 1
+    fi
+}
+
+#######################################
 # Compilation FFmpeg (Linux)
 #######################################
 install_ffmpeg_linux() {
@@ -163,6 +206,9 @@ install_ffmpeg_linux() {
     # Compiler
     echo "  Configuring FFmpeg... (this may take a while)"
     cd "$ffmpeg_src"
+
+    # Rendre libopus compilée localement visible par pkg-config
+    export PKG_CONFIG_PATH="$DEPS_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 
     ./configure \
         --prefix="$DEPS_DIR" \
@@ -351,7 +397,8 @@ usage() {
     echo ""
     echo "OPTIONS:"
     echo "  --all             Install all dependencies (default)"
-    echo "  --ffmpeg          Install only FFmpeg"
+    echo "  --opus            Install only libopus"
+    echo "  --ffmpeg          Install only FFmpeg (compile libopus first si absent)"
     echo "  --svt-av1         Install only SVT-AV1-PSY"
     echo "  --aomenc          Install only libaom (aomenc)"
     echo "  --skip-check      Skip system dependencies check"
@@ -359,7 +406,7 @@ usage() {
     echo ""
     echo "EXAMPLES:"
     echo "  $0                    # Install all dependencies"
-    echo "  $0 --ffmpeg          # Install only FFmpeg"
+    echo "  $0 --ffmpeg          # Install FFmpeg (+ libopus)"
     echo "  $0 --svt-av1 --aomenc # Install SVT-AV1 and libaom"
 }
 
@@ -368,6 +415,7 @@ usage() {
 #######################################
 main() {
     local install_all=true
+    local install_opus=false
     local install_ffmpeg=false
     local install_svt=false
     local install_aom=false
@@ -378,6 +426,11 @@ main() {
         case "$1" in
             --all)
                 install_all=true
+                shift
+                ;;
+            --opus)
+                install_all=false
+                install_opus=true
                 shift
                 ;;
             --ffmpeg)
@@ -413,6 +466,7 @@ main() {
 
     # Si --all ou aucun flag, installer tout
     if [[ "$install_all" == true ]]; then
+        install_opus=true
         install_ffmpeg=true
         install_svt=true
         install_aom=true
@@ -438,6 +492,14 @@ main() {
 
     # Installer les dépendances demandées
     local start_time=$(date +%s)
+
+    # libopus doit être compilée avant FFmpeg (dépendance)
+    if [[ "$install_opus" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            install_opus
+        fi
+        echo ""
+    fi
 
     if [[ "$install_ffmpeg" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
