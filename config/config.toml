@@ -1,0 +1,46 @@
+[daemon]
+max_concurrent_jobs = 1
+log_level = "info"
+
+[encoding]
+default_encoder = "svt-av1"
+default_audio_mode = "opus"
+default_audio_bitrate = 128
+output_suffix = ".av1"
+# Comptage précis des frames via ffmpeg (lent mais exact, utile pour vidéos VFR)
+# false = estimation rapide (durée × fps), true = comptage précis
+precise_frame_count = true
+
+[encoder.svt-av1]
+preset = 6
+crf = 30
+params = ["--keyint", "240", "--tune", "3"]
+
+[encoder.aom]
+cpu-used = 4
+crf = 30
+
+[ui]
+file_extensions = [".mp4", ".mkv", ".avi", ".mov", ".webm"]
+refresh_interval_ms = 500
+
+# Configuration des chemins (OPTIONNEL - Mode portable par défaut)
+#
+# EncodeTalker fonctionne en MODE PORTABLE par défaut :
+#   - Configuration : ./config.toml (à côté de l'exécutable)
+#   - Dépendances : ./.dependencies/ (~500 MB)
+#   - Données : ./data/ (state.json, daemon.log, daemon.sock)
+#
+# Vous pouvez personnaliser ces chemins ci-dessous si nécessaire.
+# Support de ~ (home) et variables d'environnement ($HOME, $USER).
+#
+# IMPORTANT : Le daemon ET le TUI utilisent le même config.toml
+[paths]
+# Déplacer les données ailleurs
+# data_dir = "~/encodetalker-data"
+
+# Déplacer les dépendances sur un SSD
+# deps_dir = "/mnt/ssd/encodetalker-deps"
+
+# Socket Unix personnalisé (Linux uniquement)
+# socket_path = "/tmp/encodetalker-$USER.sock"

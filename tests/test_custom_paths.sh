@@ -118,7 +118,6 @@ echo
 echo -e "${GREEN}=== Tous les tests sont passés ! ===${NC}"
 echo
 echo "Pour utiliser des chemins personnalisés:"
-echo "  1. Copiez config/custom-paths-example.toml"
+echo "  1. Copiez config/config.toml vers ~/.config/encodetalker/config.toml"
 echo "  2. Modifiez la section [paths]"
-echo "  3. Sauvegardez dans ~/.config/encodetalker/config.toml"
 echo "  4. Redémarrez le daemon"

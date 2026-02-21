@@ -69,19 +69,14 @@ Toutes les phases du plan ont été implémentées avec succès.
 
 ### Phase 5 : Documentation
 
-10. **`config/default.toml`**
-    - Ajout section `[paths]` commentée avec exemples
-    - Documentation des 3 cas d'usage principaux
+10. **`config/config.toml`**
+    - Configuration par défaut avec section `[paths]` commentée
+    - Documentation des cas d'usage principaux
 
 11. **`README.md`**
     - Nouvelle section "Customizing Paths (Advanced)"
     - Exemples d'utilisation
     - 3 cas d'usage documentés
-
-#### Documentation supplémentaire créée
-
-12. **`config/custom-paths-example.toml`** (NOUVEAU)
-    - Fichier d'exemple complet avec commentaires
 
 13. **`tests/test_custom_paths.sh`** (NOUVEAU)
     - Script de validation (exécutable)
@@ -161,8 +156,7 @@ Pour chaque chemin (data_dir, deps_dir, socket_path) :
 ## 📚 Documentation produite
 
 1. **README.md** : Section "Customizing Paths" pour utilisateurs
-2. **config/default.toml** : Section `[paths]` commentée
-3. **config/custom-paths-example.toml** : Exemples concrets
+2. **config/config.toml** : Configuration par défaut avec section `[paths]` commentée
 4. **MIGRATION_CUSTOM_PATHS.md** : Guide migration complet
 5. **tests/test_custom_paths.sh** : Script de validation
 6. **Docstrings** : Documentation inline dans le code

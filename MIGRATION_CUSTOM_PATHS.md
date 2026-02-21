@@ -193,8 +193,7 @@ data_dir = "~/encodetalker-data"
 ## 📚 Références
 
 - [README.md](README.md) : Documentation principale
-- [config/default.toml](config/default.toml) : Configuration par défaut avec exemples
-- [config/custom-paths-example.toml](config/custom-paths-example.toml) : Exemples de chemins personnalisés
+- [config/config.toml](config/config.toml) : Configuration par défaut avec exemples
 - [CLAUDE.md](CLAUDE.md) : Documentation technique pour développeurs
 
 ## 💡 Astuces

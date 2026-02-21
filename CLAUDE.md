@@ -20,7 +20,7 @@ EncodeTalker/
 │   ├── encodetalker-tui/        # Interface TUI (client)
 │   └── encodetalker-deps/       # Gestion et compilation des dépendances
 ├── config/
-│   └── default.toml             # Configuration par défaut
+│   └── config.toml              # Configuration par défaut
 ├── README.md                    # Documentation utilisateur
 ├── CONTRIBUTING.md              # Guide de contribution
 └── CLAUDE.md                    # Ce fichier
