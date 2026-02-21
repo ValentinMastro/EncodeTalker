@@ -252,12 +252,14 @@ install_ffmpeg_linux() {
     echo "  Configuring FFmpeg... (this may take a while)"
     cd "$ffmpeg_src"
 
-    # Rendre libopus compilée localement visible par pkg-config
+    # Rendre les libs compilées localement visibles par pkg-config et le linker
     export PKG_CONFIG_PATH="$DEPS_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 
     ./configure \
         --prefix="$DEPS_DIR" \
         --bindir="$DEPS_BIN" \
+        --extra-cflags="-I$DEPS_DIR/include" \
+        --extra-ldflags="-L$DEPS_DIR/lib" \
         --enable-gpl \
         --enable-libopus \
         --enable-libvpx \
