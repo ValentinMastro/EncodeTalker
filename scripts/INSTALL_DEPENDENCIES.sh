@@ -447,12 +447,14 @@ usage() {
     echo "  --ffmpeg          Install only FFmpeg (compile libopus/libvpx first si absents)"
     echo "  --svt-av1         Install only SVT-AV1-PSY"
     echo "  --aomenc          Install only libaom (aomenc)"
+    echo "  -j N              Number of parallel build threads (default: nproc)"
     echo "  --skip-check      Skip system dependencies check"
     echo "  -h, --help        Show this help"
     echo ""
     echo "EXAMPLES:"
     echo "  $0                    # Install all dependencies"
     echo "  $0 --ffmpeg          # Install FFmpeg (+ libopus, libvpx)"
+    echo "  $0 -j 4             # Install all with 4 threads"
     echo "  $0 --svt-av1 --aomenc # Install SVT-AV1 and libaom"
 }
 
@@ -499,6 +501,10 @@ main() {
                 install_all=false
                 install_aom=true
                 shift
+                ;;
+            -j)
+                NCPUS="$2"
+                shift 2
                 ;;
             --skip-check)
                 skip_check=true
