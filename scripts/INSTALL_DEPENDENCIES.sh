@@ -32,7 +32,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # URLs sources (même que dans downloader.rs)
-FFMPEG_VERSION="6.1"
+FFMPEG_VERSION="8.0.1"
 FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 SVT_AV1_GIT="https://github.com/BlueSwordM/svt-av1-psy.git"
