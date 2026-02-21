@@ -34,6 +34,8 @@ fi
 # URLs sources (même que dans downloader.rs)
 OPUS_VERSION="1.6.1"
 OPUS_URL="https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"
+LIBVPX_VERSION="1.16.0"
+LIBVPX_URL="https://github.com/webmproject/libvpx/archive/refs/tags/v${LIBVPX_VERSION}.tar.gz"
 FFMPEG_VERSION="8.0.1"
 FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
@@ -182,6 +184,49 @@ install_opus() {
         echo -e "${GREEN}✓ libopus compiled successfully${NC}"
     else
         echo -e "${RED}✗ libopus compilation failed${NC}"
+        exit 1
+    fi
+}
+
+#######################################
+# Compilation libvpx (Linux)
+#######################################
+install_libvpx() {
+    echo -e "${YELLOW}=== Installing libvpx ===${NC}"
+
+    local vpx_src="$DEPS_SRC/libvpx-${LIBVPX_VERSION}"
+
+    # Vérifier si déjà installé
+    if [[ -f "$DEPS_DIR/lib/libvpx.a" ]] || [[ -f "$DEPS_DIR/lib/libvpx.so" ]]; then
+        echo -e "${GREEN}✓ libvpx already installed${NC}"
+        return 0
+    fi
+
+    # Télécharger sources
+    download_tarball "$LIBVPX_URL" "$vpx_src"
+
+    # Compiler
+    echo "  Configuring libvpx..."
+    cd "$vpx_src"
+
+    ./configure \
+        --prefix="$DEPS_DIR" \
+        --disable-examples \
+        --disable-unit-tests \
+        --disable-docs \
+        --enable-vp9-highbitdepth
+
+    echo "  Building libvpx with $NCPUS cores..."
+    make -j"$NCPUS"
+
+    echo "  Installing libvpx..."
+    make install
+
+    # Vérifier installation
+    if [[ -f "$DEPS_DIR/lib/libvpx.a" ]] || [[ -f "$DEPS_DIR/lib/libvpx.so" ]]; then
+        echo -e "${GREEN}✓ libvpx compiled successfully${NC}"
+    else
+        echo -e "${RED}✗ libvpx compilation failed${NC}"
         exit 1
     fi
 }
@@ -398,7 +443,8 @@ usage() {
     echo "OPTIONS:"
     echo "  --all             Install all dependencies (default)"
     echo "  --opus            Install only libopus"
-    echo "  --ffmpeg          Install only FFmpeg (compile libopus first si absent)"
+    echo "  --vpx             Install only libvpx"
+    echo "  --ffmpeg          Install only FFmpeg (compile libopus/libvpx first si absents)"
     echo "  --svt-av1         Install only SVT-AV1-PSY"
     echo "  --aomenc          Install only libaom (aomenc)"
     echo "  --skip-check      Skip system dependencies check"
@@ -406,7 +452,7 @@ usage() {
     echo ""
     echo "EXAMPLES:"
     echo "  $0                    # Install all dependencies"
-    echo "  $0 --ffmpeg          # Install FFmpeg (+ libopus)"
+    echo "  $0 --ffmpeg          # Install FFmpeg (+ libopus, libvpx)"
     echo "  $0 --svt-av1 --aomenc # Install SVT-AV1 and libaom"
 }
 
@@ -416,6 +462,7 @@ usage() {
 main() {
     local install_all=true
     local install_opus=false
+    local install_vpx=false
     local install_ffmpeg=false
     local install_svt=false
     local install_aom=false
@@ -431,6 +478,11 @@ main() {
             --opus)
                 install_all=false
                 install_opus=true
+                shift
+                ;;
+            --vpx)
+                install_all=false
+                install_vpx=true
                 shift
                 ;;
             --ffmpeg)
@@ -467,6 +519,7 @@ main() {
     # Si --all ou aucun flag, installer tout
     if [[ "$install_all" == true ]]; then
         install_opus=true
+        install_vpx=true
         install_ffmpeg=true
         install_svt=true
         install_aom=true
@@ -493,10 +546,17 @@ main() {
     # Installer les dépendances demandées
     local start_time=$(date +%s)
 
-    # libopus doit être compilée avant FFmpeg (dépendance)
+    # libopus et libvpx doivent être compilées avant FFmpeg (dépendances)
     if [[ "$install_opus" == true ]] || [[ "$install_ffmpeg" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
             install_opus
+        fi
+        echo ""
+    fi
+
+    if [[ "$install_vpx" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            install_libvpx
         fi
         echo ""
     fi

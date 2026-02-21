@@ -48,7 +48,25 @@ check_opus() {
     echo "     Expected at: $DEPS_DIR/lib/libopus.a"
 }
 
-# Fonction 1 : Vérifier FFmpeg + FFprobe
+# Fonction 1 : Vérifier libvpx
+check_libvpx() {
+    echo "Checking libvpx..."
+
+    local status="✗"
+
+    if [[ -f "$DEPS_DIR/lib/libvpx.a" ]] || [[ -f "$DEPS_DIR/lib/libvpx.so" ]]; then
+        status="✓"
+        DEPS_OK=$((DEPS_OK + 1))
+        echo "  $status libvpx: $DEPS_DIR/lib/"
+        return 0
+    fi
+
+    DEPS_MISSING=$((DEPS_MISSING + 1))
+    echo "  $status libvpx: MISSING"
+    echo "     Expected at: $DEPS_DIR/lib/libvpx.a"
+}
+
+# Fonction 2 : Vérifier FFmpeg + FFprobe
 check_ffmpeg() {
     echo "Checking FFmpeg..."
 
@@ -136,14 +154,15 @@ main() {
 
     echo "Compiled Dependencies:"
     check_opus
+    check_libvpx
     check_ffmpeg
     check_svt_av1
     check_aomenc
 
     echo ""
     echo "=== Summary ==="
-    echo "  Dependencies OK:      $DEPS_OK/4"
-    echo "  Dependencies missing: $DEPS_MISSING/4"
+    echo "  Dependencies OK:      $DEPS_OK/5"
+    echo "  Dependencies missing: $DEPS_MISSING/5"
 
     if [[ $DEPS_MISSING -eq 0 ]]; then
         exit 0
