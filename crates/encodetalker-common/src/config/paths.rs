@@ -87,8 +87,13 @@ impl AppPaths {
             Self::get_default_data_dir()?
         };
 
-        // 2. config_dir TOUJOURS depuis XDG (non configurable pour éviter confusion)
-        let config_dir = Self::get_default_config_dir()?;
+        // 2. config : chercher config/config.toml en remontant depuis l'exécutable
+        let config_file = Self::find_portable_config()
+            .context("Impossible de trouver config/config.toml en remontant depuis l'exécutable")?;
+        let config_dir = config_file
+            .parent()
+            .expect("config_file a un parent")
+            .to_path_buf();
 
         // 3. Déterminer deps_dir (custom, .dependencies/ portable, ou défaut XDG)
         let deps_dir = if let Some(ref custom) = config.deps_dir {
@@ -112,7 +117,7 @@ impl AppPaths {
 
         // 5. Construire tous les chemins
         Ok(Self {
-            config_file: config_dir.join("config.toml"),
+            config_file,
             state_file: data_dir.join("state.json"),
             log_file: data_dir.join("daemon.log"),
             deps_bin_dir: deps_dir.join("bin"),
@@ -139,6 +144,20 @@ impl AppPaths {
         Ok(())
     }
 
+    /// Chercher config/config.toml en remontant depuis l'exécutable (mode portable)
+    fn find_portable_config() -> Option<PathBuf> {
+        let mut dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+        loop {
+            let candidate = dir.join("config").join("config.toml");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+            if !dir.pop() {
+                return None;
+            }
+        }
+    }
+
     /// Chercher un dossier .dependencies/ en remontant depuis l'exécutable (mode portable)
     ///
     /// Parcourt les dossiers parents de l'exécutable pour trouver .dependencies/.
@@ -163,14 +182,6 @@ impl AppPaths {
             .join("encodetalker");
         Ok(data_dir)
     }
-
-    /// Obtenir le répertoire de configuration par défaut (XDG)
-    fn get_default_config_dir() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Impossible de déterminer le répertoire de configuration")?
-            .join("encodetalker");
-        Ok(config_dir)
-    }
 }
 
 impl Default for AppPaths {
@@ -188,7 +199,9 @@ mod tests {
     fn test_default_paths_unchanged() {
         let paths = AppPaths::new().unwrap();
         assert!(paths.data_dir.ends_with("encodetalker"));
-        assert!(paths.config_dir.ends_with("encodetalker"));
+        // config_dir est le dossier config/ trouvé en remontant depuis l'exécutable
+        assert!(paths.config_dir.ends_with("config"));
+        assert!(paths.config_file.ends_with("config.toml"));
         // deps_dir peut être .dependencies/ (mode portable) ou data_dir/deps (XDG)
         assert!(paths.deps_dir.ends_with("deps") || paths.deps_dir.ends_with(".dependencies"));
 
@@ -311,8 +324,8 @@ mod tests {
     }
 
     #[test]
-    fn test_config_dir_always_xdg() {
-        // config_dir ne peut PAS être personnalisé
+    fn test_config_dir_portable() {
+        // config_dir est toujours résolu depuis config/config.toml portable
         let config = PathsConfig {
             data_dir: Some("/custom".to_string()),
             deps_dir: Some("/custom/deps".to_string()),
@@ -320,8 +333,7 @@ mod tests {
         };
 
         let paths = AppPaths::from_config(Some(config)).unwrap();
-        // config_dir reste XDG
-        assert!(paths.config_dir.ends_with("encodetalker"));
+        assert!(paths.config_dir.ends_with("config"));
         assert!(paths.config_file.ends_with("config.toml"));
     }
 }
