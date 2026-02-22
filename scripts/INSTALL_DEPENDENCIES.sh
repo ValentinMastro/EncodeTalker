@@ -41,6 +41,12 @@ FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 SVT_AV1_GIT="https://github.com/BlueSwordM/svt-av1-psy.git"
 LIBAOM_GIT="https://aomedia.googlesource.com/aom"
+DAV1D_VERSION="1.5.3"
+DAV1D_URL="https://code.videolan.org/videolan/dav1d/-/archive/${DAV1D_VERSION}/dav1d-${DAV1D_VERSION}.tar.gz"
+MESON_VERSION="1.10.1"
+MESON_URL="https://github.com/mesonbuild/meson/releases/download/${MESON_VERSION}/meson-${MESON_VERSION}.tar.gz"
+NINJA_VERSION="1.13.2"
+NINJA_URL="https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip"
 CMAKE_VERSION="3.31.5"
 CMAKE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
 
@@ -98,6 +104,81 @@ ensure_cmake() {
 }
 
 #######################################
+# Installer Meson et Ninja localement
+#######################################
+ensure_meson_ninja() {
+    # --- Ninja ---
+    if [[ -x "$DEPS_BIN/ninja" ]]; then
+        echo -e "${GREEN}✓ Local Ninja already available: $("$DEPS_BIN/ninja" --version)${NC}"
+    else
+        echo -e "${YELLOW}=== Installing Ninja ${NINJA_VERSION} ===${NC}"
+        local ninja_zip="$DEPS_SRC/ninja-linux.zip"
+
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$ninja_zip" "$NINJA_URL"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -O "$ninja_zip" "$NINJA_URL"
+        else
+            echo -e "${RED}✗ Neither curl nor wget found, cannot download Ninja${NC}"
+            exit 1
+        fi
+
+        echo "  Extracting Ninja..."
+        python3 -c "import zipfile; zipfile.ZipFile('$ninja_zip').extractall('$DEPS_BIN')"
+        chmod +x "$DEPS_BIN/ninja"
+        rm "$ninja_zip"
+
+        if [[ -x "$DEPS_BIN/ninja" ]]; then
+            echo -e "${GREEN}✓ Ninja ${NINJA_VERSION} installed${NC}"
+        else
+            echo -e "${RED}✗ Failed to install Ninja locally${NC}"
+            exit 1
+        fi
+    fi
+
+    # --- Meson ---
+    local meson_dir="$DEPS_DIR/meson-${MESON_VERSION}"
+
+    if [[ -x "$DEPS_BIN/meson" ]]; then
+        echo -e "${GREEN}✓ Local Meson already available${NC}"
+    else
+        echo -e "${YELLOW}=== Installing Meson ${MESON_VERSION} ===${NC}"
+        local meson_tarball="$DEPS_SRC/meson-${MESON_VERSION}.tar.gz"
+
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$meson_tarball" "$MESON_URL"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -O "$meson_tarball" "$MESON_URL"
+        else
+            echo -e "${RED}✗ Neither curl nor wget found, cannot download Meson${NC}"
+            exit 1
+        fi
+
+        echo "  Extracting Meson..."
+        mkdir -p "$meson_dir"
+        tar -xzf "$meson_tarball" -C "$DEPS_DIR"
+        rm "$meson_tarball"
+
+        # Créer un wrapper script pour meson
+        cat > "$DEPS_BIN/meson" << EOF
+#!/bin/sh
+exec python3 "$meson_dir/meson.py" "\$@"
+EOF
+        chmod +x "$DEPS_BIN/meson"
+
+        if [[ -x "$DEPS_BIN/meson" ]]; then
+            echo -e "${GREEN}✓ Meson ${MESON_VERSION} installed${NC}"
+        else
+            echo -e "${RED}✗ Failed to install Meson locally${NC}"
+            exit 1
+        fi
+    fi
+
+    # S'assurer que $DEPS_BIN est dans le PATH
+    export PATH="$DEPS_BIN:$PATH"
+}
+
+#######################################
 # Vérification des dépendances système
 #######################################
 check_system_dependencies() {
@@ -112,6 +193,7 @@ check_system_dependencies() {
         command -v make >/dev/null 2>&1 || missing+=("make")
         command -v git >/dev/null 2>&1 || missing+=("git")
         command -v nasm >/dev/null 2>&1 || missing+=("nasm")
+        command -v python3 >/dev/null 2>&1 || missing+=("python3")
 
         if [[ ${#missing[@]} -gt 0 ]]; then
             echo -e "${RED}✗ Missing system dependencies: ${missing[*]}${NC}"
@@ -273,6 +355,50 @@ install_libvpx() {
 }
 
 #######################################
+# Compilation libdav1d (Linux)
+#######################################
+install_dav1d() {
+    echo -e "${YELLOW}=== Installing libdav1d ===${NC}"
+
+    local dav1d_src="$DEPS_SRC/dav1d-${DAV1D_VERSION}"
+
+    # Vérifier si déjà installé
+    if [[ -f "$DEPS_DIR/lib/libdav1d.a" ]] || [[ -f "$DEPS_DIR/lib/libdav1d.so" ]]; then
+        echo -e "${GREEN}✓ libdav1d already installed${NC}"
+        return 0
+    fi
+
+    # Télécharger sources
+    download_tarball "$DAV1D_URL" "$dav1d_src"
+
+    # Compiler
+    echo "  Configuring libdav1d..."
+    cd "$dav1d_src"
+
+    meson setup build \
+        --prefix="$DEPS_DIR" \
+        --default-library=static \
+        --buildtype=release \
+        -Denable_tools=false \
+        -Denable_tests=false
+
+    echo "  Building libdav1d with $NCPUS cores..."
+    ninja -C build -j"$NCPUS"
+
+    echo "  Installing libdav1d..."
+    ninja -C build install
+
+    # Vérifier installation (peut être dans lib/ ou lib/x86_64-linux-gnu/)
+    if [[ -f "$DEPS_DIR/lib/libdav1d.a" ]] || [[ -f "$DEPS_DIR/lib/libdav1d.so" ]] || \
+       find "$DEPS_DIR/lib" -name "libdav1d.*" -print -quit 2>/dev/null | grep -q .; then
+        echo -e "${GREEN}✓ libdav1d compiled successfully${NC}"
+    else
+        echo -e "${RED}✗ libdav1d compilation failed${NC}"
+        exit 1
+    fi
+}
+
+#######################################
 # Compilation FFmpeg (Linux)
 #######################################
 install_ffmpeg_linux() {
@@ -304,6 +430,7 @@ install_ffmpeg_linux() {
         --enable-gpl \
         --enable-libopus \
         --enable-libvpx \
+        --enable-libdav1d \
         --disable-doc \
         --disable-htmlpages \
         --disable-manpages \
@@ -489,6 +616,7 @@ usage() {
     echo "  --vpx             Install only libvpx"
     echo "  --ffmpeg          Install only FFmpeg (compile libopus/libvpx first si absents)"
     echo "  --svt-av1         Install only SVT-AV1-PSY"
+    echo "  --dav1d            Install only libdav1d"
     echo "  --aomenc          Install only libaom (aomenc)"
     echo "  -j N              Number of parallel build threads (default: nproc)"
     echo "  --skip-check      Skip system dependencies check"
@@ -508,6 +636,7 @@ main() {
     local install_all=true
     local install_opus=false
     local install_vpx=false
+    local install_dav1d=false
     local install_ffmpeg=false
     local install_svt=false
     local install_aom=false
@@ -528,6 +657,11 @@ main() {
             --vpx)
                 install_all=false
                 install_vpx=true
+                shift
+                ;;
+            --dav1d)
+                install_all=false
+                install_dav1d=true
                 shift
                 ;;
             --ffmpeg)
@@ -569,6 +703,7 @@ main() {
     if [[ "$install_all" == true ]]; then
         install_opus=true
         install_vpx=true
+        install_dav1d=true
         install_ffmpeg=true
         install_svt=true
         install_aom=true
@@ -595,6 +730,14 @@ main() {
     # Installer les dépendances demandées
     local start_time=$(date +%s)
 
+    # S'assurer que Meson/Ninja fonctionnent (nécessaire pour dav1d)
+    if [[ "$install_dav1d" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            ensure_meson_ninja
+            echo ""
+        fi
+    fi
+
     # S'assurer que CMake fonctionne (nécessaire pour SVT-AV1 et libaom)
     if [[ "$install_svt" == true ]] || [[ "$install_aom" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
@@ -614,6 +757,14 @@ main() {
     if [[ "$install_vpx" == true ]] || [[ "$install_ffmpeg" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
             install_libvpx
+        fi
+        echo ""
+    fi
+
+    # libdav1d doit être compilée avant FFmpeg (dépendance)
+    if [[ "$install_dav1d" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            install_dav1d
         fi
         echo ""
     fi

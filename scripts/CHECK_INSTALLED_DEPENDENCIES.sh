@@ -66,7 +66,25 @@ check_libvpx() {
     echo "     Expected at: $DEPS_DIR/lib/libvpx.a"
 }
 
-# Fonction 2 : Vérifier FFmpeg + FFprobe
+# Fonction 2 : Vérifier libdav1d
+check_dav1d() {
+    echo "Checking libdav1d..."
+
+    local status="✗"
+
+    if [[ -f "$DEPS_DIR/lib/libdav1d.a" ]] || [[ -f "$DEPS_DIR/lib/libdav1d.so" ]]; then
+        status="✓"
+        DEPS_OK=$((DEPS_OK + 1))
+        echo "  $status libdav1d: $DEPS_DIR/lib/"
+        return 0
+    fi
+
+    DEPS_MISSING=$((DEPS_MISSING + 1))
+    echo "  $status libdav1d: MISSING"
+    echo "     Expected at: $DEPS_DIR/lib/libdav1d.a"
+}
+
+# Fonction 3 : Vérifier FFmpeg + FFprobe
 check_ffmpeg() {
     echo "Checking FFmpeg..."
 
@@ -155,14 +173,15 @@ main() {
     echo "Compiled Dependencies:"
     check_opus
     check_libvpx
+    check_dav1d
     check_ffmpeg
     check_svt_av1
     check_aomenc
 
     echo ""
     echo "=== Summary ==="
-    echo "  Dependencies OK:      $DEPS_OK/5"
-    echo "  Dependencies missing: $DEPS_MISSING/5"
+    echo "  Dependencies OK:      $DEPS_OK/6"
+    echo "  Dependencies missing: $DEPS_MISSING/6"
 
     if [[ $DEPS_MISSING -eq 0 ]]; then
         exit 0
