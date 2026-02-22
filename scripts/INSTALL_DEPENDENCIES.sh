@@ -57,29 +57,20 @@ esac
 NCPUS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 #######################################
-# Vérifier/installer CMake localement
+# Installer CMake localement
 #######################################
 ensure_cmake() {
-    # Tester si cmake système fonctionne réellement (pas juste présent dans PATH)
-    if command -v cmake >/dev/null 2>&1 && cmake --version >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ System CMake works: $(cmake --version | head -1)${NC}"
-        return 0
-    fi
-
-    echo -e "${YELLOW}⚠ System CMake missing or broken, installing locally...${NC}"
-
     local cmake_dir="$DEPS_DIR/cmake-${CMAKE_VERSION}-linux-x86_64"
     local cmake_bin="$cmake_dir/bin"
 
     # Vérifier si déjà téléchargé
     if [[ -x "$cmake_bin/cmake" ]]; then
-        echo -e "${GREEN}✓ Local CMake already available${NC}"
+        echo -e "${GREEN}✓ Local CMake already available: $("$cmake_bin/cmake" --version | head -1)${NC}"
         export PATH="$cmake_bin:$PATH"
-        cmake --version | head -1
         return 0
     fi
 
-    echo "  Downloading CMake ${CMAKE_VERSION}..."
+    echo -e "${YELLOW}=== Installing CMake ${CMAKE_VERSION} ===${NC}"
     local cmake_tarball="$DEPS_SRC/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
 
     if command -v curl >/dev/null 2>&1; then
@@ -99,7 +90,7 @@ ensure_cmake() {
     export PATH="$cmake_bin:$PATH"
 
     if cmake --version >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ Local CMake installed: $(cmake --version | head -1)${NC}"
+        echo -e "${GREEN}✓ CMake ${CMAKE_VERSION} installed${NC}"
     else
         echo -e "${RED}✗ Failed to install CMake locally${NC}"
         exit 1
