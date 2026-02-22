@@ -54,10 +54,10 @@ impl AppPaths {
 
     /// Créer les chemins avec configuration personnalisée
     ///
-    /// Ordre de priorité pour chaque chemin:
+    /// Ordre de priorité pour deps_dir:
     /// 1. Valeur explicite dans paths_config (ex: deps_dir = "/custom/deps")
-    /// 2. Valeur dérivée (ex: deps_dir dérivé de data_dir personnalisé)
-    /// 3. Valeur par défaut XDG
+    /// 2. Dossier .dependencies/ à côté de l'exécutable (mode portable)
+    /// 3. Valeur dérivée de data_dir ou défaut XDG (data_dir/deps)
     ///
     /// # Arguments
     /// * `paths_config` - Configuration optionnelle des chemins depuis [paths] du TOML
@@ -90,10 +90,12 @@ impl AppPaths {
         // 2. config_dir TOUJOURS depuis XDG (non configurable pour éviter confusion)
         let config_dir = Self::get_default_config_dir()?;
 
-        // 3. Déterminer deps_dir (custom, dérivé de data_dir, ou défaut)
+        // 3. Déterminer deps_dir (custom, .dependencies/ portable, ou défaut XDG)
         let deps_dir = if let Some(ref custom) = config.deps_dir {
             PathsConfig::expand_path(custom)
                 .context("Impossible d'expanser deps_dir personnalisé")?
+        } else if let Some(portable) = Self::find_portable_deps_dir() {
+            portable
         } else {
             // Dérivé de data_dir (personnalisé ou XDG)
             data_dir.join("deps")
@@ -135,6 +137,17 @@ impl AppPaths {
         std::fs::create_dir_all(&self.deps_src_dir)
             .context("Impossible de créer le répertoire src des dépendances")?;
         Ok(())
+    }
+
+    /// Chercher un dossier .dependencies/ à côté de l'exécutable (mode portable)
+    fn find_portable_deps_dir() -> Option<PathBuf> {
+        let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+        let portable = exe_dir.join(".dependencies");
+        if portable.is_dir() {
+            Some(portable)
+        } else {
+            None
+        }
     }
 
     /// Obtenir le répertoire de données par défaut (XDG)
