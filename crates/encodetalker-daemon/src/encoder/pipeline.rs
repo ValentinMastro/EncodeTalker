@@ -65,7 +65,11 @@ impl EncodingPipeline {
         // 2. Préparer les chemins temporaires
         let temp_dir = job.output_path.parent().unwrap();
         let video_temp = temp_dir.join(format!("{}.ivf", uuid::Uuid::new_v4()));
-        let audio_temp = temp_dir.join(format!("{}.opus", uuid::Uuid::new_v4()));
+        let audio_ext = match &job.config.audio_mode {
+            AudioMode::Opus { .. } => "opus",
+            _ => "mka",
+        };
+        let audio_temp = temp_dir.join(format!("{}.{}", uuid::Uuid::new_v4(), audio_ext));
 
         // 3. Encoder la vidéo
         self.encode_video(
