@@ -139,14 +139,20 @@ impl AppPaths {
         Ok(())
     }
 
-    /// Chercher un dossier .dependencies/ à côté de l'exécutable (mode portable)
+    /// Chercher un dossier .dependencies/ en remontant depuis l'exécutable (mode portable)
+    ///
+    /// Parcourt les dossiers parents de l'exécutable pour trouver .dependencies/.
+    /// Ex: target/release/encodetalker-daemon → remonte jusqu'à la racine du projet.
     fn find_portable_deps_dir() -> Option<PathBuf> {
-        let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-        let portable = exe_dir.join(".dependencies");
-        if portable.is_dir() {
-            Some(portable)
-        } else {
-            None
+        let mut dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+        loop {
+            let candidate = dir.join(".dependencies");
+            if candidate.is_dir() {
+                return Some(candidate);
+            }
+            if !dir.pop() {
+                return None;
+            }
         }
     }
 
@@ -180,13 +186,12 @@ mod tests {
 
     #[test]
     fn test_default_paths_unchanged() {
-        // Vérifier que new() fonctionne comme avant (rétrocompatibilité)
         let paths = AppPaths::new().unwrap();
         assert!(paths.data_dir.ends_with("encodetalker"));
         assert!(paths.config_dir.ends_with("encodetalker"));
-        assert!(paths.deps_dir.ends_with("deps"));
+        // deps_dir peut être .dependencies/ (mode portable) ou data_dir/deps (XDG)
+        assert!(paths.deps_dir.ends_with("deps") || paths.deps_dir.ends_with(".dependencies"));
 
-        // Sur Unix, socket_path est un fichier, sur Windows c'est un Named Pipe
         #[cfg(unix)]
         assert_eq!(paths.socket_path.file_name().unwrap(), "daemon.sock");
         #[cfg(windows)]
@@ -214,8 +219,11 @@ mod tests {
         let paths = AppPaths::from_config(Some(config)).unwrap();
         assert_eq!(paths.data_dir, PathBuf::from("/tmp/custom_data"));
 
-        // Vérifier chemins dérivés
-        assert_eq!(paths.deps_dir, PathBuf::from("/tmp/custom_data/deps"));
+        // deps_dir : .dependencies/ portable si trouvé, sinon dérivé de data_dir
+        assert!(
+            paths.deps_dir == Path::new("/tmp/custom_data/deps")
+                || paths.deps_dir.ends_with(".dependencies")
+        );
 
         // Socket path est dérivé sur Unix, mais Named Pipe fixe sur Windows
         #[cfg(unix)]
