@@ -12,29 +12,37 @@ use encodetalker_daemon::{
     DaemonConfig, DepsCompilationTracker, EncodingPipeline, IpcServer, Persistence, QueueManager,
 };
 
+/// Chercher un fichier en remontant les dossiers parents depuis l'exécutable
+fn find_script_from_exe(relative_path: &str) -> Option<std::path::PathBuf> {
+    let mut dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    loop {
+        let candidate = dir.join(relative_path);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
 /// Vérifie que toutes les dépendances sont installées via le script shell
 async fn check_dependencies_installed() -> anyhow::Result<()> {
-    // Chemin du script de vérification (à la racine du projet)
-    let script_path = std::env::current_exe()?
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .map(|p| p.join("CHECK_INSTALLED_DEPENDENCIES.sh"))
-        .ok_or_else(|| anyhow::anyhow!("Cannot determine project root"))?;
-
-    // Si le script n'existe pas, chercher dans le répertoire courant
-    let script_path = if !script_path.exists() {
-        std::env::current_dir()?.join("CHECK_INSTALLED_DEPENDENCIES.sh")
-    } else {
-        script_path
-    };
-
-    if !script_path.exists() {
-        anyhow::bail!(
-            "Script CHECK_INSTALLED_DEPENDENCIES.sh not found.\n\
-            Please ensure you are running the daemon from the project directory."
-        );
-    }
+    // Chercher le script en remontant depuis l'exécutable
+    let script_name = "scripts/CHECK_INSTALLED_DEPENDENCIES.sh";
+    let script_path = find_script_from_exe(script_name)
+        .or_else(|| {
+            // Fallback : chercher depuis le répertoire courant
+            let candidate = std::env::current_dir().ok()?.join(script_name);
+            candidate.exists().then_some(candidate)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Script {} not found.\n\
+                Please ensure you are running the daemon from the project directory.",
+                script_name
+            )
+        })?;
 
     info!(
         "Vérification des dépendances avec le script: {}",
