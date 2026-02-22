@@ -41,6 +41,8 @@ FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 SVT_AV1_GIT="https://github.com/BlueSwordM/svt-av1-psy.git"
 LIBAOM_GIT="https://aomedia.googlesource.com/aom"
+CMAKE_VERSION="3.31.5"
+CMAKE_URL="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
 
 # Détection OS
 OS="$(uname -s)"
@@ -55,6 +57,56 @@ esac
 NCPUS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 #######################################
+# Vérifier/installer CMake localement
+#######################################
+ensure_cmake() {
+    # Tester si cmake système fonctionne réellement (pas juste présent dans PATH)
+    if command -v cmake >/dev/null 2>&1 && cmake --version >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ System CMake works: $(cmake --version | head -1)${NC}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠ System CMake missing or broken, installing locally...${NC}"
+
+    local cmake_dir="$DEPS_DIR/cmake-${CMAKE_VERSION}-linux-x86_64"
+    local cmake_bin="$cmake_dir/bin"
+
+    # Vérifier si déjà téléchargé
+    if [[ -x "$cmake_bin/cmake" ]]; then
+        echo -e "${GREEN}✓ Local CMake already available${NC}"
+        export PATH="$cmake_bin:$PATH"
+        cmake --version | head -1
+        return 0
+    fi
+
+    echo "  Downloading CMake ${CMAKE_VERSION}..."
+    local cmake_tarball="$DEPS_SRC/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -L -o "$cmake_tarball" "$CMAKE_URL"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$cmake_tarball" "$CMAKE_URL"
+    else
+        echo -e "${RED}✗ Neither curl nor wget found, cannot download CMake${NC}"
+        exit 1
+    fi
+
+    echo "  Extracting CMake..."
+    tar -xzf "$cmake_tarball" -C "$DEPS_DIR"
+    rm "$cmake_tarball"
+
+    # Ajouter au PATH
+    export PATH="$cmake_bin:$PATH"
+
+    if cmake --version >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ Local CMake installed: $(cmake --version | head -1)${NC}"
+    else
+        echo -e "${RED}✗ Failed to install CMake locally${NC}"
+        exit 1
+    fi
+}
+
+#######################################
 # Vérification des dépendances système
 #######################################
 check_system_dependencies() {
@@ -63,11 +115,10 @@ check_system_dependencies() {
     local missing=()
 
     if [[ "$PLATFORM" == "linux" ]]; then
-        # Linux : gcc, g++, make, cmake, git, nasm
+        # Linux : gcc, g++, make, git, nasm (cmake géré par ensure_cmake)
         command -v gcc >/dev/null 2>&1 || missing+=("gcc")
         command -v g++ >/dev/null 2>&1 || missing+=("g++")
         command -v make >/dev/null 2>&1 || missing+=("make")
-        command -v cmake >/dev/null 2>&1 || missing+=("cmake")
         command -v git >/dev/null 2>&1 || missing+=("git")
         command -v nasm >/dev/null 2>&1 || missing+=("nasm")
 
@@ -83,15 +134,14 @@ check_system_dependencies() {
             exit 1
         fi
     elif [[ "$PLATFORM" == "windows" ]]; then
-        # Windows : cmake, git (gcc pas nécessaire car binaires pré-compilés)
-        command -v cmake >/dev/null 2>&1 || missing+=("cmake")
+        # Windows : git (gcc/cmake pas nécessaires car binaires pré-compilés)
         command -v git >/dev/null 2>&1 || missing+=("git")
 
         if [[ ${#missing[@]} -gt 0 ]]; then
             echo -e "${RED}✗ Missing system dependencies: ${missing[*]}${NC}"
             echo ""
             echo "Please install them first:"
-            echo "  choco install cmake git"
+            echo "  choco install git"
             exit 1
         fi
     fi
@@ -553,6 +603,14 @@ main() {
 
     # Installer les dépendances demandées
     local start_time=$(date +%s)
+
+    # S'assurer que CMake fonctionne (nécessaire pour SVT-AV1 et libaom)
+    if [[ "$install_svt" == true ]] || [[ "$install_aom" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            ensure_cmake
+            echo ""
+        fi
+    fi
 
     # libopus et libvpx doivent être compilées avant FFmpeg (dépendances)
     if [[ "$install_opus" == true ]] || [[ "$install_ffmpeg" == true ]]; then
