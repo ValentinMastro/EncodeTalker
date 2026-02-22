@@ -377,6 +377,7 @@ install_dav1d() {
 
     meson setup build \
         --prefix="$DEPS_DIR" \
+        --libdir=lib \
         --default-library=static \
         --buildtype=release \
         -Denable_tools=false \
