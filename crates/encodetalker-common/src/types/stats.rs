@@ -20,6 +20,10 @@ pub struct EncodingStats {
     pub progress_percent: f64,
     /// ETA (temps restant estimé)
     pub eta: Option<Duration>,
+    /// Passe actuelle (1 pour SVT-AV1, 1 ou 2 pour aomenc)
+    pub current_pass: u32,
+    /// Nombre total de passes (1 pour SVT-AV1, 2 pour aomenc)
+    pub total_passes: u32,
 }
 
 impl Default for EncodingStats {
@@ -33,6 +37,8 @@ impl Default for EncodingStats {
             total_duration: None,
             progress_percent: 0.0,
             eta: None,
+            current_pass: 1,
+            total_passes: 1,
         }
     }
 }
