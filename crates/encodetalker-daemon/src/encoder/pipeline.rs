@@ -99,7 +99,7 @@ impl EncodingPipeline {
         Ok(())
     }
 
-    /// Encoder la piste vidéo avec pipe kernel direct (std::process)
+    /// Encoder la piste vidéo (gère automatiquement les 2 passes pour aomenc)
     async fn encode_video(
         &self,
         job: &EncodingJob,
@@ -110,6 +110,46 @@ impl EncodingPipeline {
     ) -> Result<()> {
         info!("Encodage vidéo avec {:?}", job.config.encoder);
 
+        match job.config.encoder {
+            EncoderType::SvtAv1 => {
+                let encoder_cmd = self.build_svt_av1_std_command(job, output_path);
+                self.run_encode_pass(job, video_info, encoder_cmd, stats_tx, cancel_rx)
+                    .await?;
+            }
+            EncoderType::Aom => {
+                let fpf_path = output_path.with_extension("log");
+
+                // Passe 1 : génère les statistiques
+                info!("aomenc passe 1/2 : analyse");
+                let encoder_cmd =
+                    self.build_aom_std_command(job, Path::new("/dev/null"), 1, &fpf_path);
+                self.run_encode_pass(job, video_info, encoder_cmd, stats_tx.clone(), cancel_rx)
+                    .await?;
+
+                // Passe 2 : encodage final
+                info!("aomenc passe 2/2 : encodage");
+                let encoder_cmd = self.build_aom_std_command(job, output_path, 2, &fpf_path);
+                self.run_encode_pass(job, video_info, encoder_cmd, stats_tx, cancel_rx)
+                    .await?;
+
+                // Nettoyer le fichier de stats
+                let _ = tokio::fs::remove_file(&fpf_path).await;
+            }
+        }
+
+        info!("Encodage vidéo terminé avec succès");
+        Ok(())
+    }
+
+    /// Lancer une passe d'encodage (ffmpeg → encodeur via pipe kernel)
+    async fn run_encode_pass(
+        &self,
+        job: &EncodingJob,
+        video_info: &VideoInfo,
+        mut encoder_cmd: std::process::Command,
+        stats_tx: mpsc::UnboundedSender<EncodingStats>,
+        cancel_rx: &mut mpsc::UnboundedReceiver<()>,
+    ) -> Result<()> {
         // 1. Spawner ffmpeg avec std::process (stdout piped)
         let mut ffmpeg_cmd = std::process::Command::new(&self.ffmpeg_bin);
         ffmpeg_cmd
@@ -149,16 +189,13 @@ impl EncodingPipeline {
             .take()
             .context("Impossible de prendre stderr de ffmpeg")?;
 
-        // 3. Spawner l'encodeur avec stdin = ffmpeg_stdout (PIPE KERNEL DIRECT)
-        let mut encoder_child = match job.config.encoder {
-            EncoderType::SvtAv1 => self.build_svt_av1_std_command(job, output_path),
-            EncoderType::Aom => self.build_aom_std_command(job, output_path),
-        }
-        .stdin(Stdio::from(ffmpeg_stdout)) // <-- LE FIX: pipe kernel direct
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("Échec du démarrage de l'encodeur")?;
+        // 3. Spawner l'encodeur avec stdin = ffmpeg_stdout (pipe kernel direct)
+        let mut encoder_child = encoder_cmd
+            .stdin(Stdio::from(ffmpeg_stdout))
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Échec du démarrage de l'encodeur")?;
 
         let encoder_stderr = encoder_child
             .stderr
@@ -290,7 +327,6 @@ impl EncodingPipeline {
             tracing::error!("Échec de jointure du thread stderr ffmpeg: {:?}", e);
         }
 
-        info!("Encodage vidéo terminé avec succès");
         Ok(())
     }
 
@@ -323,28 +359,45 @@ impl EncodingPipeline {
         cmd
     }
 
-    /// Construire la commande aomenc (std::process)
-    fn build_aom_std_command(&self, job: &EncodingJob, output: &Path) -> std::process::Command {
+    /// Construire la commande aomenc pour une passe donnée (std::process)
+    fn build_aom_std_command(
+        &self,
+        job: &EncodingJob,
+        output: &Path,
+        pass: u32,
+        fpf_path: &Path,
+    ) -> std::process::Command {
         let mut cmd = std::process::Command::new(&self.aom_bin);
 
-        cmd.arg("-")
-            .arg("--cq-level")
-            .arg(job.config.encoder_params.crf.to_string())
-            .arg("--cpu-used")
-            .arg(job.config.encoder_params.preset.to_string())
-            .arg("--end-usage=q");
+        cmd.arg(format!("--cq-level={}", job.config.encoder_params.crf))
+            .arg(format!("--cpu-used={}", job.config.encoder_params.preset))
+            .arg("--end-usage=q")
+            .arg("--passes=2")
+            .arg(format!("--pass={}", pass))
+            .arg(format!("--fpf={}", fpf_path.display()));
 
-        // Ajouter threads si spécifié
-        if let Some(threads) = job.config.encoder_params.threads {
-            cmd.arg("--threads").arg(threads.to_string());
+        // Ajouter threads (auto-detect si None)
+        let threads = job.config.encoder_params.threads.unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(1)
+        });
+        cmd.arg(format!("--threads={}", threads));
+
+        // --ivf seulement pour la passe 2 (passe 1 écrit dans /dev/null)
+        if pass == 2 {
+            cmd.arg("--ivf");
         }
 
-        cmd.arg("--ivf").arg("-o").arg(output);
+        cmd.arg("-o").arg(output);
 
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {
             cmd.arg(param);
         }
+
+        // Source stdin en dernier (argument positionnel)
+        cmd.arg("-");
 
         cmd
     }
