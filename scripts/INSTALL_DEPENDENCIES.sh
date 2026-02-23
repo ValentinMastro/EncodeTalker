@@ -41,6 +41,7 @@ FFMPEG_URL="https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz"
 FFMPEG_WINDOWS_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 SVT_AV1_GIT="https://github.com/BlueSwordM/svt-av1-psy.git"
 LIBAOM_GIT="https://aomedia.googlesource.com/aom"
+VMAF_GIT="https://github.com/Netflix/vmaf.git"
 DAV1D_VERSION="1.5.3"
 DAV1D_URL="https://code.videolan.org/videolan/dav1d/-/archive/${DAV1D_VERSION}/dav1d-${DAV1D_VERSION}.tar.gz"
 MESON_VERSION="1.10.1"
@@ -400,6 +401,54 @@ install_dav1d() {
 }
 
 #######################################
+# Compilation libvmaf (Linux)
+#######################################
+install_vmaf() {
+    echo -e "${YELLOW}=== Installing libvmaf ===${NC}"
+
+    local vmaf_src="$DEPS_SRC/vmaf"
+
+    # Vérifier si déjà installé
+    if [[ -f "$DEPS_DIR/lib/libvmaf.a" ]] || [[ -f "$DEPS_DIR/lib/libvmaf.so" ]]; then
+        echo -e "${GREEN}✓ libvmaf already installed${NC}"
+        return 0
+    fi
+
+    # Cloner repo Git
+    clone_git_repo "$VMAF_GIT" "$vmaf_src" 1
+
+    # Compiler avec Meson/Ninja (dans le sous-répertoire libvmaf)
+    echo "  Configuring libvmaf..."
+    cd "$vmaf_src/libvmaf"
+
+    # Nettoyer un éventuel build précédent échoué
+    if [[ -d "build" ]]; then
+        rm -rf "build"
+    fi
+
+    meson setup build \
+        --prefix="$DEPS_DIR" \
+        --libdir=lib \
+        --default-library=static \
+        --buildtype=release
+
+    echo "  Building libvmaf with $NCPUS cores..."
+    ninja -C build -j"$NCPUS"
+
+    echo "  Installing libvmaf..."
+    ninja -C build install
+
+    # Vérifier installation
+    if [[ -f "$DEPS_DIR/lib/libvmaf.a" ]] || [[ -f "$DEPS_DIR/lib/libvmaf.so" ]] || \
+       find "$DEPS_DIR/lib" -name "libvmaf.*" -print -quit 2>/dev/null | grep -q .; then
+        echo -e "${GREEN}✓ libvmaf compiled successfully${NC}"
+    else
+        echo -e "${RED}✗ libvmaf compilation failed${NC}"
+        exit 1
+    fi
+}
+
+#######################################
 # Compilation FFmpeg (Linux)
 #######################################
 install_ffmpeg_linux() {
@@ -407,31 +456,48 @@ install_ffmpeg_linux() {
 
     local ffmpeg_src="$DEPS_SRC/ffmpeg-${FFMPEG_VERSION}"
 
-    # Vérifier si déjà installé
+    # Vérifier si déjà installé (avec toutes les libs nécessaires)
     if [[ -x "$DEPS_BIN/ffmpeg" ]] && [[ -x "$DEPS_BIN/ffprobe" ]]; then
-        echo -e "${GREEN}✓ FFmpeg already installed${NC}"
-        return 0
+        # Vérifier que FFmpeg est compilé avec libvmaf
+        if "$DEPS_BIN/ffmpeg" -filters 2>/dev/null | grep -q "libvmaf"; then
+            echo -e "${GREEN}✓ FFmpeg already installed (with libvmaf)${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}⚠ FFmpeg installed but missing libvmaf, recompiling...${NC}"
+            rm -f "$DEPS_BIN/ffmpeg" "$DEPS_BIN/ffprobe"
+        fi
     fi
 
-    # Télécharger sources
-    download_tarball "$FFMPEG_URL" "$ffmpeg_src"
+    # Télécharger sources (si pas déjà présentes)
+    if [[ ! -d "$ffmpeg_src" ]]; then
+        download_tarball "$FFMPEG_URL" "$ffmpeg_src"
+    fi
 
     # Compiler
     echo "  Configuring FFmpeg... (this may take a while)"
     cd "$ffmpeg_src"
 
+    # Nettoyer un éventuel build précédent (important si on recompile avec de nouvelles libs)
+    if [[ -f "ffbuild/config.mak" ]]; then
+        echo "  Cleaning previous FFmpeg build..."
+        make distclean 2>/dev/null || true
+    fi
+
     # Rendre les libs compilées localement visibles par pkg-config et le linker
     export PKG_CONFIG_PATH="$DEPS_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 
+    # Ajouter -lstdc++ pour linker libvmaf qui contient du C++
     ./configure \
         --prefix="$DEPS_DIR" \
         --bindir="$DEPS_BIN" \
         --extra-cflags="-I$DEPS_DIR/include" \
         --extra-ldflags="-L$DEPS_DIR/lib" \
+        --extra-libs="-lstdc++ -lm -lpthread" \
         --enable-gpl \
         --enable-libopus \
         --enable-libvpx \
         --enable-libdav1d \
+        --enable-libvmaf \
         --disable-doc \
         --disable-htmlpages \
         --disable-manpages \
@@ -618,6 +684,7 @@ usage() {
     echo "  --ffmpeg          Install only FFmpeg (compile libopus/libvpx first si absents)"
     echo "  --svt-av1         Install only SVT-AV1-PSY"
     echo "  --dav1d            Install only libdav1d"
+    echo "  --vmaf            Install only libvmaf"
     echo "  --aomenc          Install only libaom (aomenc)"
     echo "  -j N              Number of parallel build threads (default: nproc)"
     echo "  --skip-check      Skip system dependencies check"
@@ -638,6 +705,7 @@ main() {
     local install_opus=false
     local install_vpx=false
     local install_dav1d=false
+    local install_vmaf=false
     local install_ffmpeg=false
     local install_svt=false
     local install_aom=false
@@ -663,6 +731,11 @@ main() {
             --dav1d)
                 install_all=false
                 install_dav1d=true
+                shift
+                ;;
+            --vmaf)
+                install_all=false
+                install_vmaf=true
                 shift
                 ;;
             --ffmpeg)
@@ -705,6 +778,7 @@ main() {
         install_opus=true
         install_vpx=true
         install_dav1d=true
+        install_vmaf=true
         install_ffmpeg=true
         install_svt=true
         install_aom=true
@@ -731,8 +805,8 @@ main() {
     # Installer les dépendances demandées
     local start_time=$(date +%s)
 
-    # S'assurer que Meson/Ninja fonctionnent (nécessaire pour dav1d)
-    if [[ "$install_dav1d" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+    # S'assurer que Meson/Ninja fonctionnent (nécessaire pour dav1d et libvmaf)
+    if [[ "$install_dav1d" == true ]] || [[ "$install_vmaf" == true ]] || [[ "$install_ffmpeg" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
             ensure_meson_ninja
             echo ""
@@ -766,6 +840,14 @@ main() {
     if [[ "$install_dav1d" == true ]] || [[ "$install_ffmpeg" == true ]]; then
         if [[ "$PLATFORM" == "linux" ]]; then
             install_dav1d
+        fi
+        echo ""
+    fi
+
+    # libvmaf doit être compilée avant FFmpeg (dépendance)
+    if [[ "$install_vmaf" == true ]] || [[ "$install_ffmpeg" == true ]]; then
+        if [[ "$PLATFORM" == "linux" ]]; then
+            install_vmaf
         fi
         echo ""
     fi

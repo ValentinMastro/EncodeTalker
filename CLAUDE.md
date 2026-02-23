@@ -169,6 +169,16 @@ debug!("Debug détaillé");
 - ✅ Bon : Télécharger et compiler localement
 - ❌ Mauvais : Nécessiter ruby, rake, boost, gmp, etc. installés sur le système
 
+**Problème libvmaf + FFmpeg** : libvmaf contient du code C++ (svm.cpp) mais FFmpeg utilise gcc. Il faut ajouter `-lstdc++` dans `--extra-libs` lors du configure de FFmpeg, sinon le test de détection de libvmaf échoue avec des erreurs de symboles C++ non résolus (`undefined reference to std::...`).
+
+```bash
+# ✅ Configuration correcte de FFmpeg avec libvmaf
+./configure \
+    --extra-ldflags="-L$DEPS_DIR/lib" \
+    --extra-libs="-lstdc++ -lm -lpthread" \
+    --enable-libvmaf
+```
+
 ### 2. Pipeline d'encodage
 
 Le pipeline utilise **uniquement ffmpeg** pour le muxing :
