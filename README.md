@@ -37,10 +37,6 @@ See [System Requirements](#-system-requirements) for your platform.
 ./INSTALL_DEPENDENCIES.sh --aomenc    # libaom only
 ```
 
-**Time required**:
-- **Linux**: ~60 minutes (compilation from source)
-- **Windows**: ~3 minutes (download pre-compiled binaries)
-
 ### 3. Build EncodeTalker
 
 ```bash
@@ -73,32 +69,8 @@ sudo apt install build-essential cmake git nasm
 sudo dnf install @development-tools cmake git nasm
 ```
 
-### Windows
-```powershell
-# Install Git and CMake via Chocolatey
-choco install git cmake
-
-# Or download manually:
-# - Git: https://git-scm.com/download/win
-# - CMake: https://cmake.org/download/
-```
-
 **Note**:
 - **Linux**: All encoding dependencies are compiled locally in `~/.local/share/encodetalker/deps/` - **no sudo required!** 🎉
-- **Windows**: Pre-compiled binaries are downloaded to `%LOCALAPPDATA%\encodetalker\deps\` - **no compilation needed!** ⚡
-
-### ⏱️ Installation Time
-
-The `INSTALL_DEPENDENCIES.sh` script handles all dependency installation automatically:
-
-**Linux** (compilation from source):
-- **FFmpeg**: ~15-20 minutes
-- **SVT-AV1-PSY**: ~10-15 minutes
-- **libaom**: ~15-20 minutes
-- **Total: ~40-55 minutes** (one-time setup)
-
-**Windows** (pre-compiled binaries download):
-- **All dependencies**: ~2-3 minutes (network-dependent)
 
 **Selective installation**:
 ```bash
@@ -123,7 +95,7 @@ The `INSTALL_DEPENDENCIES.sh` script handles all dependency installation automat
 The TUI will:
 1. Check if the daemon is running
 2. Auto-start the daemon if needed
-3. Connect via IPC (Unix socket on Linux, Named Pipe on Windows)
+3. Connect via IPC (Unix socket)
 4. Display the interactive interface
 
 ### Basic Navigation
@@ -171,8 +143,7 @@ This makes it easy to encode entire directories or specific sets of files with t
 
 The daemon will:
 - Verify all dependencies are installed in `~/.local/share/encodetalker/deps/bin/`
-- Listen on Unix socket (Linux): `~/.local/share/encodetalker/daemon.sock`
-- Listen on Named Pipe (Windows): `\\.\pipe\encodetalker`
+- Listen on Unix socket: `~/.local/share/encodetalker/daemon.sock`
 - Load saved state (queue, history)
 
 ## ⌨️ Keyboard Shortcuts
@@ -376,21 +347,12 @@ EncodeTalker is actively developed. Current limitations:
 - **Manual stream selection not implemented**: All audio/subtitle streams are included by default
 - **Single encoder instance per job**: No multi-pass encoding yet
 - **No remote API**: Daemon only accessible via local IPC
-- **Limited platform support**: Linux and Windows supported, macOS not tested (PRs welcome!)
+- **Limited platform support**: Linux only (macOS and Windows not yet supported)
 - **Limited audio options**: Only Opus encoding or copy (no other codecs)
 - **No video filters**: Cropping, resizing, denoising not yet implemented
 - **No preset system**: Cannot save/load encoding configurations
 
 See [GitHub Issues](https://github.com/yourusername/EncodeTalker/issues) for planned features and known bugs.
-
-## 🤝 Contributing
-
-Contributions are welcome! To get started:
-
-1. Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines
-2. Check [CLAUDE.md](CLAUDE.md) for architecture and coding conventions
-3. Look for issues labeled `good-first-issue` or `help-wanted`
-4. Fork the repo, make your changes, and submit a PR
 
 ### Development Quick Start
 
@@ -413,12 +375,7 @@ RUST_LOG=debug ./target/release/encodetalker-daemon
 
 ## 📄 License
 
-Licensed under either of:
-
-- **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-
-at your option.
+Licensed under **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 ## 🙏 Acknowledgments
 
@@ -429,9 +386,3 @@ EncodeTalker builds upon excellent open-source projects:
 - **[libaom](https://aomedia.googlesource.com/aom/)**: Reference AV1 encoder
 - **[Ratatui](https://ratatui.rs/)**: Terminal UI framework
 - **[Tokio](https://tokio.rs/)**: Async runtime for Rust
-
----
-
-**Made with ❤️ by the EncodeTalker Team**
-
-*Questions? Issues? Feature requests? Open an issue on GitHub!*
