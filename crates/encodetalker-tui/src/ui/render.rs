@@ -1,5 +1,8 @@
 use crate::app::{AppState, View};
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, Paragraph, Tabs},
+};
 
 /// Rendre l'interface complète
 pub fn render_ui(frame: &mut Frame, state: &AppState) {
@@ -50,8 +53,7 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
         "Historique",
     ];
     let selected = match state.current_view {
-        View::Loading => 0, // Ne devrait pas arriver (Loading n'affiche pas le header)
-        View::FileBrowser => 0,
+        View::Loading | View::FileBrowser => 0,
         View::Queue => 1,
         View::Active => 2,
         View::History => 3,
@@ -78,8 +80,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
         match state.current_view {
             View::Loading => " q: Quitter ", // Ne devrait pas arriver (Loading affiche son propre footer)
             View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Entrée: Ouvrir | ESPACE: Sélectionner | Ctrl+A: Tout | a: Ajouter | r: Rafraîchir | q: Quitter ",
-            View::Queue => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
-            View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
+            View::Queue | View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
             View::History => " Tab: Vue suivante | ↑↓: Naviguer | r: Réessayer | c: Effacer | C: Tout effacer | q: Quitter ",
         }
     };

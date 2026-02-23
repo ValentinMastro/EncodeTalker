@@ -16,6 +16,7 @@ pub enum JobStatus {
 }
 
 impl JobStatus {
+    #[must_use]
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
@@ -23,6 +24,7 @@ impl JobStatus {
         )
     }
 
+    #[must_use]
     pub fn is_active(&self) -> bool {
         matches!(self, JobStatus::Running)
     }

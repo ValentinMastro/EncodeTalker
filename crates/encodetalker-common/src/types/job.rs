@@ -117,6 +117,7 @@ pub struct EncodingJob {
 
 impl EncodingJob {
     /// Créer un nouveau job
+    #[must_use]
     pub fn new(input_path: PathBuf, output_path: PathBuf, config: EncodingConfig) -> Self {
         Self {
             id: Uuid::new_v4(),

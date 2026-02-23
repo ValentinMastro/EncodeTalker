@@ -12,6 +12,10 @@ pub struct IpcListener {
 
 impl IpcListener {
     /// Créer un listener sur le chemin spécifié
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le socket Unix ou le Named Pipe ne peut pas être créé.
     pub fn bind(path: impl AsRef<Path>) -> Result<Self> {
         #[cfg(unix)]
         {
@@ -44,6 +48,10 @@ impl IpcListener {
     }
 
     /// Accepter une connexion cliente
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si l'acceptation de connexion échoue ou si le Named Pipe ne peut pas être créé.
     pub async fn accept(&self) -> Result<IpcStream> {
         #[cfg(unix)]
         {

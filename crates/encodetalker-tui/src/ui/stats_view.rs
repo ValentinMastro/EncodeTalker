@@ -1,7 +1,10 @@
 use crate::app::AppState;
 use chrono::Local;
 use encodetalker_common::JobStatus;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph},
+};
 
 /// Rendre la vue des jobs actifs
 pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -62,7 +65,7 @@ fn render_active_job(
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" {} ", filename))
+        .title(format!(" {filename} "))
         .border_style(border_style);
 
     if let Some(stats) = &job.stats {
@@ -73,7 +76,7 @@ fn render_active_job(
             let hours = secs / 3600;
             let mins = (secs % 3600) / 60;
             let secs = secs % 60;
-            format!("ETA: {:02}:{:02}:{:02}", hours, mins, secs)
+            format!("ETA: {hours:02}:{mins:02}:{secs:02}")
         } else {
             "ETA: --:--:--".to_string()
         };
@@ -111,17 +114,19 @@ fn render_active_job(
                 0.0
             };
 
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let gauge1 = Gauge::default()
                 .block(Block::default().borders(Borders::NONE))
                 .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
                 .percent(pass1_progress.min(100.0) as u16)
-                .label(format!("Passe 1: {:.1}%", pass1_progress));
+                .label(format!("Passe 1: {pass1_progress:.1}%"));
 
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let gauge2 = Gauge::default()
                 .block(Block::default().borders(Borders::NONE))
                 .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
                 .percent(pass2_progress.min(100.0) as u16)
-                .label(format!("Passe 2: {:.1}%", pass2_progress));
+                .label(format!("Passe 2: {pass2_progress:.1}%"));
 
             let gauge_chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -132,11 +137,12 @@ fn render_active_job(
             frame.render_widget(gauge2, gauge_chunks[1]);
         } else {
             // Barre unique (SVT-AV1)
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let gauge = Gauge::default()
                 .block(Block::default().borders(Borders::NONE))
                 .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
                 .percent(progress.min(100.0) as u16)
-                .label(format!("{:.1}%", progress));
+                .label(format!("{progress:.1}%"));
 
             frame.render_widget(gauge, info_chunks[2]);
         }
@@ -191,7 +197,7 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
                 let hours = secs / 3600;
                 let mins = (secs % 3600) / 60;
                 let secs = secs % 60;
-                format!("{}:{:02}:{:02}", hours, mins, secs)
+                format!("{hours}:{mins:02}:{secs:02}")
             } else {
                 "--:--:--".to_string()
             };
@@ -213,14 +219,13 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let error_text = if let Some(error) = &job.error_message {
-                format!("\n  Erreur: {}", error)
+                format!("\n  Erreur: {error}")
             } else {
                 String::new()
             };
 
             let text = format!(
-                "{} {} | Durée: {}\n  Début: {}\n  Fin:   {}{}",
-                status_icon, filename, duration_text, started_text, finished_text, error_text
+                "{status_icon} {filename} | Durée: {duration_text}\n  Début: {started_text}\n  Fin:   {finished_text}{error_text}"
             );
 
             ListItem::new(text).style(Style::default().fg(status_color))

@@ -106,13 +106,10 @@ async fn count_frames_precisely(ffmpeg_bin: &Path, input: &Path) -> Result<u64> 
         last_frame
     };
 
-    let last_frame = match tokio::time::timeout(Duration::from_secs(300), count_task).await {
-        Ok(frames) => frames,
-        Err(_) => {
-            tracing::warn!("Timeout comptage frames (5 min), arrêt du processus");
-            let _ = child.kill().await;
-            anyhow::bail!("Timeout comptage précis des frames");
-        }
+    let Ok(last_frame) = tokio::time::timeout(Duration::from_secs(300), count_task).await else {
+        tracing::warn!("Timeout comptage frames (5 min), arrêt du processus");
+        let _ = child.kill().await;
+        anyhow::bail!("Timeout comptage précis des frames");
     };
 
     child.wait().await?;
@@ -122,6 +119,19 @@ async fn count_frames_precisely(ffmpeg_bin: &Path, input: &Path) -> Result<u64> 
 }
 
 /// Prober un fichier vidéo avec ffprobe
+///
+/// # Errors
+///
+/// Retourne une erreur si:
+/// - `ffprobe` échoue à s'exécuter ou retourne une erreur
+/// - Le parsing JSON échoue
+/// - Aucun stream vidéo n'est trouvé
+/// - Les métadonnées essentielles (largeur/hauteur) sont manquantes
+///
+/// # Panics
+///
+/// Peut paniquer si le chemin d'entrée contient des caractères invalides (conversion `to_str().unwrap()`).
+#[allow(clippy::too_many_lines)]
 pub async fn probe_video(
     ffprobe_bin: &Path,
     ffmpeg_bin: &Path,
@@ -146,7 +156,7 @@ pub async fn probe_video(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ffprobe a échoué: {}", stderr);
+        anyhow::bail!("ffprobe a échoué: {stderr}");
     }
 
     let json = String::from_utf8(output.stdout)?;
@@ -174,8 +184,7 @@ pub async fn probe_video(
     let is_interlaced = video_stream
         .field_order
         .as_ref()
-        .map(|fo| matches!(fo.as_str(), "tt" | "bb" | "tb" | "bt"))
-        .unwrap_or(false);
+        .is_some_and(|fo| matches!(fo.as_str(), "tt" | "bb" | "tb" | "bt"));
 
     if is_interlaced {
         tracing::info!(
@@ -212,10 +221,11 @@ pub async fn probe_video(
                         Some(frames)
                     }
                     Err(e) => {
-                        tracing::error!("Échec du comptage précis: {}, fallback sur estimation", e);
+                        tracing::error!("Échec du comptage précis: {e}, fallback sur estimation");
                         // Fallback sur estimation si le comptage échoue
                         if let Some(duration) = duration {
                             let duration_secs = duration.as_secs_f64();
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                             let estimated = (duration_secs * fps).ceil() as u64;
                             tracing::info!(
                                 "Estimation fallback: {} frames (durée={:.2}s × fps={:.2})",
@@ -233,6 +243,7 @@ pub async fn probe_video(
                 // Niveau 3: Estimation rapide (durée × fps)
                 if let Some(duration) = duration {
                     let duration_secs = duration.as_secs_f64();
+                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                     let estimated = (duration_secs * fps).ceil() as u64;
                     tracing::info!(
                         "nb_frames absent, estimation: {} frames (durée={:.2}s × fps={:.2})",
@@ -316,6 +327,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn test_frame_estimation() {
         // 2 minutes à 24 fps
         let duration = Duration::from_secs(120);

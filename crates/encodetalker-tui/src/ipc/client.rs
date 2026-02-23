@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use encodetalker_common::ipc::IpcStream;
+use encodetalker_common::ipc::{IpcListener, IpcStream};
 use futures::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::path::Path;
@@ -22,12 +22,16 @@ pub struct IpcClient {
     request_tx: mpsc::UnboundedSender<Request>,
     /// Receiver pour recevoir des événements
     event_rx: Arc<Mutex<mpsc::UnboundedReceiver<Event>>>,
-    /// Map des pending responses (par request_id)
+    /// Map des pending responses (par `request_id`)
     pending_responses: Arc<Mutex<HashMap<Uuid, tokio::sync::oneshot::Sender<Response>>>>,
 }
 
 impl IpcClient {
     /// Se connecter au daemon
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la connexion au socket échoue.
     pub async fn connect(socket_path: impl AsRef<Path>) -> Result<Self> {
         let stream = IpcStream::connect(socket_path.as_ref())
             .await
@@ -128,6 +132,10 @@ impl IpcClient {
     }
 
     /// Ajouter un job à la queue
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn add_job(
         &self,
         input_path: std::path::PathBuf,
@@ -144,12 +152,16 @@ impl IpcClient {
 
         match response.payload {
             ResponsePayload::JobId { job_id } => Ok(job_id),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Annuler un job
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn cancel_job(&self, job_id: Uuid) -> Result<()> {
         let response = self
             .send_request(RequestPayload::CancelJob { job_id })
@@ -157,12 +169,16 @@ impl IpcClient {
 
         match response.payload {
             ResponsePayload::Ok => Ok(()),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Retry un job failed
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn retry_job(&self, job_id: Uuid) -> Result<()> {
         let response = self
             .send_request(RequestPayload::RetryJob { job_id })
@@ -170,68 +186,92 @@ impl IpcClient {
 
         match response.payload {
             ResponsePayload::Ok => Ok(()),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Obtenir la liste des jobs en queue
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn list_queue(&self) -> Result<Vec<EncodingJob>> {
         let response = self.send_request(RequestPayload::ListQueue).await?;
 
         match response.payload {
             ResponsePayload::JobList { jobs } => Ok(jobs),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Obtenir la liste des jobs actifs
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn list_active(&self) -> Result<Vec<EncodingJob>> {
         let response = self.send_request(RequestPayload::ListActive).await?;
 
         match response.payload {
             ResponsePayload::JobList { jobs } => Ok(jobs),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Obtenir l'historique
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn list_history(&self) -> Result<Vec<EncodingJob>> {
         let response = self.send_request(RequestPayload::ListHistory).await?;
 
         match response.payload {
             ResponsePayload::JobList { jobs } => Ok(jobs),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Supprimer un job spécifique de l'historique
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn remove_from_history(&self, job_id: Uuid) -> Result<()> {
         let response = self
             .send_request(RequestPayload::RemoveFromHistory { job_id })
             .await?;
         match response.payload {
             ResponsePayload::Ok => Ok(()),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Clear l'historique
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn clear_history(&self) -> Result<()> {
         let response = self.send_request(RequestPayload::ClearHistory).await?;
 
         match response.payload {
             ResponsePayload::Ok => Ok(()),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
 
     /// Ping le daemon
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si la réponse est inattendue.
     pub async fn ping(&self) -> Result<()> {
         let response = self.send_request(RequestPayload::Ping).await?;
 
@@ -242,12 +282,16 @@ impl IpcClient {
     }
 
     /// Obtenir l'état de compilation des dépendances
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
     pub async fn get_deps_status(&self) -> Result<DepsStatusInfo> {
         let response = self.send_request(RequestPayload::GetDepsStatus).await?;
 
         match response.payload {
             ResponsePayload::DepsStatus { status } => Ok(status),
-            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {}", message),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
             _ => anyhow::bail!("Réponse inattendue"),
         }
     }
@@ -258,6 +302,10 @@ impl IpcClient {
     }
 
     /// Rafraîchir toutes les listes
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si l'une des requêtes (queue, active, history) échoue.
     pub async fn refresh_all(
         &self,
     ) -> Result<(Vec<EncodingJob>, Vec<EncodingJob>, Vec<EncodingJob>)> {
@@ -269,21 +317,20 @@ impl IpcClient {
 }
 
 /// Démarrer le daemon s'il n'est pas déjà en cours d'exécution
+///
+/// # Errors
+///
+/// Retourne une erreur si le daemon ne peut pas être démarré ou si la connexion échoue.
 pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Result<()> {
     // Vérifier si un serveur écoute déjà sur ce socket/pipe
     if IpcStream::server_exists(socket_path) {
         // Essayer de se connecter
-        match IpcStream::connect(socket_path).await {
-            Ok(_) => {
-                info!("Daemon déjà en cours d'exécution");
-                return Ok(());
-            }
-            Err(_) => {
-                // Le serveur existe mais la connexion échoue, nettoyer
-                use encodetalker_common::ipc::IpcListener;
-                IpcListener::cleanup(socket_path);
-            }
+        if IpcStream::connect(socket_path).await.is_ok() {
+            info!("Daemon déjà en cours d'exécution");
+            return Ok(());
         }
+        // Le serveur existe mais la connexion échoue, nettoyer
+        IpcListener::cleanup(socket_path);
     }
 
     info!("Démarrage du daemon...");

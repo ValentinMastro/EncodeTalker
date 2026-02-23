@@ -22,7 +22,7 @@ fn deps_bin_dir() -> PathBuf {
 }
 
 #[tokio::test]
-#[ignore] // Ignorer par défaut (test lent, nécessite vidéo)
+#[ignore = "Test lent, nécessite vidéo"]
 async fn test_encode_test1_mkv_with_svt_av1() -> Result<()> {
     // Setup
     let input_path = test_video_dir().join("test1.mkv");

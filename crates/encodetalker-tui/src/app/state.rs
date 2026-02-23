@@ -14,6 +14,7 @@ pub enum View {
 }
 
 impl View {
+    #[must_use]
     pub fn next(&self) -> Self {
         match self {
             View::Loading => View::Loading, // Bloquer navigation depuis Loading
@@ -24,6 +25,7 @@ impl View {
         }
     }
 
+    #[must_use]
     pub fn prev(&self) -> Self {
         match self {
             View::Loading => View::Loading, // Bloquer navigation depuis Loading
@@ -34,6 +36,7 @@ impl View {
         }
     }
 
+    #[must_use]
     pub fn title(&self) -> &str {
         match self {
             View::Loading => "Initialisation",
@@ -62,6 +65,7 @@ pub struct LoadingState {
 
 impl LoadingState {
     /// Créer un état de chargement vide (en attente)
+    #[must_use]
     pub fn new() -> Self {
         Self {
             total_deps: 0,
@@ -72,7 +76,8 @@ impl LoadingState {
         }
     }
 
-    /// Créer depuis un DepsStatusInfo
+    /// Créer depuis un `DepsStatusInfo`
+    #[must_use]
     pub fn from_status(status: DepsStatusInfo) -> Self {
         Self {
             total_deps: status.total_count,
@@ -84,6 +89,12 @@ impl LoadingState {
     }
 
     /// Calculer le pourcentage de progression
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
     pub fn progress_percent(&self) -> u16 {
         if self.total_deps == 0 {
             0
@@ -93,6 +104,7 @@ impl LoadingState {
     }
 
     /// Obtenir le texte de l'étape actuelle
+    #[must_use]
     pub fn step_text(&self) -> Option<String> {
         match (&self.current_dep, &self.current_step) {
             (Some(dep), Some(step)) => {
@@ -101,7 +113,7 @@ impl LoadingState {
                     DepsCompilationStep::Building => "Compilation",
                     DepsCompilationStep::Verifying => "Vérification",
                 };
-                Some(format!("{}: {}...", dep, step_str))
+                Some(format!("{dep}: {step_str}..."))
             }
             _ => None,
         }
@@ -139,6 +151,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[must_use]
     pub fn new(start_dir: PathBuf) -> Self {
         Self {
             current_view: View::Loading,
@@ -208,6 +221,7 @@ pub struct FileBrowserState {
 }
 
 impl FileBrowserState {
+    #[must_use]
     pub fn new(start_dir: PathBuf) -> Self {
         let mut state = Self {
             current_dir: start_dir,
@@ -219,6 +233,10 @@ impl FileBrowserState {
     }
 
     /// Rafraîchir la liste des entrées
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si `self.current_dir.parent()` retourne `Some` mais `unwrap()` échoue (ne devrait jamais arriver).
     pub fn refresh(&mut self) {
         self.entries.clear();
 
@@ -235,7 +253,7 @@ impl FileBrowserState {
         // Lire le répertoire
         if let Ok(entries) = std::fs::read_dir(&self.current_dir) {
             let mut items: Vec<DirEntry> = entries
-                .filter_map(|e| e.ok())
+                .filter_map(std::result::Result::ok)
                 .filter_map(|e| {
                     let path = e.path();
                     let name = e.file_name().to_string_lossy().to_string();
@@ -278,6 +296,7 @@ impl FileBrowserState {
     }
 
     /// Obtenir l'entrée sélectionnée
+    #[must_use]
     pub fn get_selected(&self, index: usize) -> Option<&DirEntry> {
         self.entries.get(index)
     }
@@ -310,11 +329,13 @@ impl FileBrowserState {
     }
 
     /// Vérifier si un fichier est sélectionné
+    #[must_use]
     pub fn is_selected(&self, path: &Path) -> bool {
         self.selected_files.contains(path)
     }
 
     /// Obtenir la liste des fichiers sélectionnés (triée)
+    #[must_use]
     pub fn get_selected_files(&self) -> Vec<PathBuf> {
         let mut files: Vec<PathBuf> = self.selected_files.iter().cloned().collect();
         files.sort();
@@ -385,11 +406,13 @@ pub struct EncodeConfigDialog {
 
 impl EncodeConfigDialog {
     /// Créer dialogue pour un fichier unique
+    #[must_use]
     pub fn new(input_path: PathBuf) -> Self {
         Self::new_batch(vec![input_path])
     }
 
     /// Créer dialogue pour plusieurs fichiers
+    #[must_use]
     pub fn new_batch(input_paths: Vec<PathBuf>) -> Self {
         let output_path = if input_paths.len() == 1 {
             let mut out = input_paths[0].clone();
@@ -413,6 +436,7 @@ impl EncodeConfigDialog {
     }
 
     /// Est-ce un batch?
+    #[must_use]
     pub fn is_batch(&self) -> bool {
         self.input_paths.len() > 1
     }

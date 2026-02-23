@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{prelude::*, widgets::{Block, Borders, ListItem, List, ListState}};
 
 /// Rendre le navigateur de fichiers
 pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {

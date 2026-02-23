@@ -8,6 +8,10 @@ use ratatui::{
 };
 
 /// Rendre la vue de chargement (compilation des dépendances)
+///
+/// # Panics
+///
+/// Peut paniquer si `state.step_text()` retourne `Some` mais l'unwrap échoue (ne devrait jamais arriver).
 pub fn render_loading_view(frame: &mut Frame, area: Rect, state: &LoadingState) {
     if let Some(error) = &state.error {
         render_error_state(frame, area, error);
@@ -62,12 +66,10 @@ pub fn render_loading_view(frame: &mut Frame, area: Rect, state: &LoadingState) 
     render_deps_list(frame, chunks[2], state);
 
     // Étape actuelle
-    let current_step_text = if state.completed_deps == state.total_deps {
-        "✅ Prêt !".to_string()
-    } else if let Some(step) = state.step_text() {
-        step
-    } else {
-        "En attente...".to_string()
+    let current_step_text = match () {
+        () if state.completed_deps == state.total_deps => "✅ Prêt !".to_string(),
+        () if state.step_text().is_some() => state.step_text().unwrap(),
+        () => "En attente...".to_string(),
     };
 
     let current_step = Paragraph::new(current_step_text)
@@ -99,22 +101,26 @@ fn render_deps_list(frame: &mut Frame, area: Rect, state: &LoadingState) {
         .iter()
         .enumerate()
         .map(|(idx, (name, duration))| {
-            let (icon, style) = if idx < state.completed_deps {
-                // Terminé
-                ("✅", Style::default().fg(Color::Green))
-            } else if idx == state.completed_deps {
-                // En cours
-                ("⏳", Style::default().fg(Color::Yellow))
-            } else {
-                // En attente
-                ("⏸", Style::default().fg(Color::DarkGray))
+            let (icon, style) = match idx.cmp(&state.completed_deps) {
+                std::cmp::Ordering::Less => {
+                    // Terminé
+                    ("✅", Style::default().fg(Color::Green))
+                }
+                std::cmp::Ordering::Equal => {
+                    // En cours
+                    ("⏳", Style::default().fg(Color::Yellow))
+                }
+                std::cmp::Ordering::Greater => {
+                    // En attente
+                    ("⏸", Style::default().fg(Color::DarkGray))
+                }
             };
 
             let line = Line::from(vec![
                 Span::raw("  "),
                 Span::styled(icon, style),
                 Span::raw(" "),
-                Span::styled(format!("{} ({})", name, duration), style),
+                Span::styled(format!("{name} ({duration})"), style),
             ]);
 
             ListItem::new(line)

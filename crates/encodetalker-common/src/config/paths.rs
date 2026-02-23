@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use super::PathsConfig;
 
 /// Ajouter le suffixe d'exécutable (.exe sur Windows, rien sur Unix)
+#[must_use]
 pub fn binary_name(name: &str) -> String {
-    format!("{}{}", name, std::env::consts::EXE_SUFFIX)
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
 }
 
 /// Helper pour obtenir le chemin IPC par défaut (socket Unix ou Named Pipe)
@@ -48,19 +49,37 @@ impl AppPaths {
     /// Créer les chemins avec valeurs par défaut XDG
     ///
     /// Équivalent à `AppPaths::from_config(None)`
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si:
+    /// - Le répertoire de données local ne peut pas être déterminé
+    /// - Le fichier `config/config.toml` n'est pas trouvé en remontant depuis l'exécutable
+    /// - L'expansion de chemin personnalisé échoue
     pub fn new() -> Result<Self> {
         Self::from_config(None)
     }
 
     /// Créer les chemins avec configuration personnalisée
     ///
-    /// Ordre de priorité pour deps_dir:
-    /// 1. Valeur explicite dans paths_config (ex: deps_dir = "/custom/deps")
+    /// Ordre de priorité pour `deps_dir`:
+    /// 1. Valeur explicite dans `paths_config` (ex: `deps_dir` = "/custom/deps")
     /// 2. Dossier .dependencies/ à côté de l'exécutable (mode portable)
-    /// 3. Valeur dérivée de data_dir ou défaut XDG (data_dir/deps)
+    /// 3. Valeur dérivée de `data_dir` ou défaut XDG (`data_dir/deps`)
     ///
     /// # Arguments
     /// * `paths_config` - Configuration optionnelle des chemins depuis [paths] du TOML
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si:
+    /// - Le répertoire de données local ne peut pas être déterminé
+    /// - Le fichier `config/config.toml` n'est pas trouvé en remontant depuis l'exécutable
+    /// - L'expansion de chemin personnalisé échoue
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si `config_file` n'a pas de parent (ne devrait jamais arriver en pratique).
     ///
     /// # Exemples
     /// ```no_run
@@ -130,6 +149,10 @@ impl AppPaths {
     }
 
     /// Créer tous les répertoires nécessaires
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si un des répertoires ne peut pas être créé.
     pub fn ensure_dirs_exist(&self) -> Result<()> {
         std::fs::create_dir_all(&self.data_dir)
             .context("Impossible de créer le répertoire de données")?;

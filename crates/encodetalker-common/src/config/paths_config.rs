@@ -14,13 +14,13 @@ pub struct PathsConfig {
     pub data_dir: Option<String>,
 
     /// Répertoire des dépendances compilées (~500 MB)
-    /// Défaut: <data_dir>/deps
+    /// Défaut: `<data_dir>/deps`
     /// Cas d'usage: déplacer sur SSD pour compilation plus rapide
     #[serde(default)]
     pub deps_dir: Option<String>,
 
     /// Socket Unix pour communication daemon<->TUI
-    /// Défaut: <data_dir>/daemon.sock
+    /// Défaut: `<data_dir>/daemon.sock`
     /// Cas d'usage: multi-utilisateurs avec /tmp/encodetalker-$USER.sock
     #[serde(default)]
     pub socket_path: Option<String>,
@@ -29,6 +29,10 @@ pub struct PathsConfig {
 impl PathsConfig {
     /// Expander un chemin avec support de ~ et variables d'environnement
     ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si une variable d'environnement référencée n'existe pas.
+    ///
     /// Exemples:
     /// - "~/data" → "/home/user/data"
     /// - "$HOME/data" → "/home/user/data"
@@ -36,8 +40,7 @@ impl PathsConfig {
     pub fn expand_path(path: &str) -> anyhow::Result<PathBuf> {
         let expanded = shellexpand::full(path).with_context(|| {
             format!(
-                "Impossible d'expanser le chemin '{}'. Vérifiez que toutes les variables d'environnement existent.",
-                path
+                "Impossible d'expanser le chemin '{path}'. Vérifiez que toutes les variables d'environnement existent."
             )
         })?;
         Ok(PathBuf::from(expanded.as_ref()))

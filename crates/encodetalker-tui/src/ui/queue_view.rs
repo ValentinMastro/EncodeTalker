@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{prelude::*, widgets::{Block, Borders, Paragraph, ListItem, List, ListState}};
 
 /// Rendre la vue de la queue
 pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -36,10 +36,10 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let audio = match &job.config.audio_mode {
-                encodetalker_common::AudioMode::Opus { bitrate } => format!("Opus {}k", bitrate),
+                encodetalker_common::AudioMode::Opus { bitrate } => format!("Opus {bitrate}k"),
                 encodetalker_common::AudioMode::Copy => "Copie".to_string(),
                 encodetalker_common::AudioMode::Custom { codec, bitrate } => {
-                    format!("{} {}k", codec, bitrate)
+                    format!("{codec} {bitrate}k")
                 }
             };
 

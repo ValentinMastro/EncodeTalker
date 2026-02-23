@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
+use encodetalker_common::ipc::IpcListener;
 use encodetalker_common::AppPaths;
 use encodetalker_daemon::{
     DaemonConfig, DepsCompilationTracker, EncodingPipeline, IpcServer, Persistence, QueueManager,
@@ -27,7 +28,7 @@ fn find_script_from_exe(relative_path: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Vérifie que toutes les dépendances sont installées via le script shell
-async fn check_dependencies_installed() -> anyhow::Result<()> {
+fn check_dependencies_installed() -> anyhow::Result<()> {
     // Chercher le script en remontant depuis l'exécutable
     let script_name = "scripts/CHECK_INSTALLED_DEPENDENCIES.sh";
     let script_path = find_script_from_exe(script_name)
@@ -38,9 +39,8 @@ async fn check_dependencies_installed() -> anyhow::Result<()> {
         })
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Script {} not found.\n\
-                Please ensure you are running the daemon from the project directory.",
-                script_name
+                "Script {script_name} not found.\n\
+                Please ensure you are running the daemon from the project directory."
             )
         })?;
 
@@ -53,7 +53,7 @@ async fn check_dependencies_installed() -> anyhow::Result<()> {
     let output = Command::new("bash")
         .arg(&script_path)
         .output()
-        .map_err(|e| anyhow::anyhow!("Échec de l'exécution du script de vérification: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Échec de l'exécution du script de vérification: {e}"))?;
 
     // Vérifier le code de sortie
     if !output.status.success() {
@@ -92,6 +92,7 @@ async fn check_dependencies_installed() -> anyhow::Result<()> {
 }
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)]
 async fn main() -> anyhow::Result<()> {
     // Initialiser le logging
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
@@ -105,10 +106,10 @@ async fn main() -> anyhow::Result<()> {
     info!("EncodeTalker Daemon v{}", env!("CARGO_PKG_VERSION"));
 
     // ÉTAPE 1: Créer AppPaths par défaut pour trouver config.toml
-    let default_paths = AppPaths::new().map_err(|e| anyhow::anyhow!("{}", e))?;
+    let default_paths = AppPaths::new().map_err(|e| anyhow::anyhow!("{e}"))?;
     default_paths
         .ensure_dirs_exist()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // ÉTAPE 2: Charger config.toml (peut contenir [paths] personnalisés)
     let config = DaemonConfig::load_or_default(&default_paths.config_file);
@@ -119,10 +120,10 @@ async fn main() -> anyhow::Result<()> {
 
     // ÉTAPE 3: Recréer AppPaths avec la config (chemins personnalisés si définis)
     let paths =
-        AppPaths::from_config(Some(config.paths.clone())).map_err(|e| anyhow::anyhow!("{}", e))?;
+        AppPaths::from_config(Some(config.paths.clone())).map_err(|e| anyhow::anyhow!("{e}"))?;
     paths
         .ensure_dirs_exist()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // ÉTAPE 4: Logger les chemins utilisés
     info!("Chemins utilisés:");
@@ -132,14 +133,12 @@ async fn main() -> anyhow::Result<()> {
     info!("  - Configuration: {:?}", paths.config_file);
 
     // ÉTAPE 5: Créer le listener IPC immédiatement pour que le TUI puisse se connecter
-    use encodetalker_common::ipc::IpcListener;
-
     IpcListener::cleanup(&paths.socket_path);
     let listener = IpcListener::bind(&paths.socket_path)?;
     info!("Listener IPC créé et en écoute");
 
     // Vérifier que les dépendances sont installées (exit si manquantes)
-    check_dependencies_installed().await?;
+    check_dependencies_installed()?;
 
     // Utiliser les binaires depuis le répertoire de dépendances
     let deps_bin = paths.deps_bin_dir.clone();
@@ -148,10 +147,10 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(windows)]
     let exe_suffix = ".exe";
 
-    let ffmpeg_bin = deps_bin.join(format!("ffmpeg{}", exe_suffix));
-    let ffprobe_bin = deps_bin.join(format!("ffprobe{}", exe_suffix));
-    let svt_av1_bin = deps_bin.join(format!("SvtAv1EncApp{}", exe_suffix));
-    let aomenc_bin = deps_bin.join(format!("aomenc{}", exe_suffix));
+    let ffmpeg_bin = deps_bin.join(format!("ffmpeg{exe_suffix}"));
+    let ffprobe_bin = deps_bin.join(format!("ffprobe{exe_suffix}"));
+    let svt_av1_bin = deps_bin.join(format!("SvtAv1EncApp{exe_suffix}"));
+    let aomenc_bin = deps_bin.join(format!("aomenc{exe_suffix}"));
 
     // Créer le pipeline d'encodage
     let pipeline = EncodingPipeline::new(

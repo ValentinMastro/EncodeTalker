@@ -35,11 +35,19 @@ impl IpcServer {
     }
 
     /// Démarrer le serveur IPC (wrapper pour compatibilité)
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le socket ne peut pas être créé ou si l'acceptation de connexions échoue.
     pub async fn run(&self, event_rx: mpsc::UnboundedReceiver<QueueEvent>) -> Result<()> {
         self.run_with_listener(None, event_rx).await
     }
 
     /// Démarrer le serveur IPC avec un listener optionnel déjà créé
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le socket ne peut pas être créé ou si l'acceptation de connexions échoue.
     pub async fn run_with_listener(
         &self,
         listener: Option<IpcListener>,
@@ -252,7 +260,7 @@ impl IpcServer {
 
             RequestPayload::GetJob { job_id } => match queue_manager.get_job(job_id).await {
                 Some(job) => Response::new(request_id, ResponsePayload::Job { job: Box::new(job) }),
-                None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
+                None => Response::error(request_id, format!("Job {job_id} non trouvé")),
             },
 
             RequestPayload::GetStats { job_id } => match queue_manager.get_job(job_id).await {
@@ -260,7 +268,7 @@ impl IpcServer {
                     Some(stats) => Response::new(request_id, ResponsePayload::Stats { stats }),
                     None => Response::error(request_id, "Job sans stats".to_string()),
                 },
-                None => Response::error(request_id, format!("Job {} non trouvé", job_id)),
+                None => Response::error(request_id, format!("Job {job_id} non trouvé")),
             },
 
             RequestPayload::RemoveFromHistory { job_id } => {

@@ -70,6 +70,7 @@ pub struct QueueManager {
 }
 
 impl QueueManager {
+    #[must_use]
     pub fn new(
         max_concurrent: usize,
         pipeline: EncodingPipeline,
@@ -91,6 +92,10 @@ impl QueueManager {
     }
 
     /// Charger l'état depuis le disque
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier de persistance ne peut pas être lu ou désérialisé.
     pub async fn load_state(&self) -> Result<()> {
         let state = self.persistence.load().await?;
 
@@ -111,6 +116,10 @@ impl QueueManager {
     }
 
     /// Sauvegarder l'état sur le disque
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier de persistance ne peut pas être écrit ou sérialisé.
     pub async fn save_state(&self) -> Result<()> {
         let state = PersistedState {
             queue: self.queue.read().await.clone(),
@@ -122,6 +131,10 @@ impl QueueManager {
     }
 
     /// Ajouter un job à la queue
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le daemon n'accepte plus de nouveaux jobs.
     pub async fn add_job(&self, mut job: EncodingJob) -> Result<Uuid> {
         if !*self.accepting_jobs.read().await {
             anyhow::bail!("Le daemon n'accepte plus de nouveaux jobs");
@@ -142,6 +155,14 @@ impl QueueManager {
     }
 
     /// Annuler un job
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le job n'est pas trouvé dans la queue ou parmi les jobs actifs.
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si `queue.remove(pos)` retourne `None` (ne devrait pas arriver car `position` garantit l'existence).
     pub async fn cancel_job(&self, job_id: Uuid) -> Result<()> {
         // Vérifier si c'est un job actif
         if self.active.read().await.contains_key(&job_id) {
@@ -167,10 +188,14 @@ impl QueueManager {
             return Ok(());
         }
 
-        anyhow::bail!("Job {} non trouvé", job_id);
+        anyhow::bail!("Job {job_id} non trouvé");
     }
 
     /// Retry un job failed
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le job n'est pas trouvé dans l'historique ou n'est pas en statut Failed.
     pub async fn retry_job(&self, job_id: Uuid) -> Result<()> {
         let mut history = self.history.write().await;
 
@@ -194,7 +219,7 @@ impl QueueManager {
             return Ok(());
         }
 
-        anyhow::bail!("Job {} non trouvé ou non failed", job_id);
+        anyhow::bail!("Job {job_id} non trouvé ou non failed");
     }
 
     /// Obtenir la queue
@@ -213,6 +238,10 @@ impl QueueManager {
     }
 
     /// Supprimer un job spécifique de l'historique
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le job n'est pas trouvé dans l'historique.
     pub async fn remove_from_history(&self, job_id: Uuid) -> Result<()> {
         let mut history = self.history.write().await;
         let initial_len = history.len();
@@ -223,11 +252,15 @@ impl QueueManager {
             info!("Job {} supprimé de l'historique", job_id);
             Ok(())
         } else {
-            anyhow::bail!("Job {} non trouvé dans l'historique", job_id)
+            anyhow::bail!("Job {job_id} non trouvé dans l'historique")
         }
     }
 
     /// Clear l'historique
+    ///
+    /// # Errors
+    ///
+    /// Ne retourne jamais d'erreur actuellement, mais utilise `Result` pour cohérence avec l'API.
     pub async fn clear_history(&self) -> Result<()> {
         self.history.write().await.clear();
         info!("Historique nettoyé");

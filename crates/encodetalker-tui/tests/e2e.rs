@@ -54,7 +54,7 @@ const KEY_ENTER: &[u8] = b"\r";
 /// Le test attend ensuite jusqu'à 5 minutes l'apparition du fichier
 /// test1.av1.mkv, puis vérifie qu'il existe et n'est pas vide.
 #[test]
-#[ignore] // Test lent (encodage réel) — lancer avec: cargo test -- --ignored
+#[ignore = "Test lent (encodage réel)"]
 fn test_tui_encode_test1_svtav1_preset13() {
     let tui = tui_bin();
     let daemon = daemon_bin();

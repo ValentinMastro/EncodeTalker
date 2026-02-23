@@ -1,29 +1,32 @@
 use encodetalker_common::EncodingStats;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::time::Duration;
 
-static FRAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"frame=\s*(\d+)").unwrap());
-static FPS_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"fps=\s*([\d.]+)").unwrap());
-static BITRATE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"bitrate=\s*([\d.]+)").unwrap());
-static TIME_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})").unwrap());
+static FRAME_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"frame=\s*(\d+)").unwrap());
+static FPS_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"fps=\s*([\d.]+)").unwrap());
+static BITRATE_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"bitrate=\s*([\d.]+)").unwrap());
+static TIME_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})").unwrap());
 // Format SvtAv1EncApp avec --progress 2: "Encoding frame   3456 1234.56 kbps 210.12 fps"
 // Note: espaces multiples entre "frame" et le numéro
-static ENCODER_REGEX: Lazy<Regex> = Lazy::new(|| {
+static ENCODER_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"Encoding\s+frame\s+(\d+)\s+([\d.]+)\s+kbps\s+([\d.]+)\s+fps").unwrap()
 });
 // Format aomenc: "Pass 1/2 frame  268/229    54960B   14288 ms 18.76 fps [ETA  unknown]"
-static AOMENC_REGEX: Lazy<Regex> = Lazy::new(|| {
+static AOMENC_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"Pass\s+(\d)/(\d)\s+frame\s+(\d+)/\d+\s+\d+B\s+\d+\s+ms\s+([\d.]+)\s+fps").unwrap()
 });
 
-/// Parser de stats FFmpeg depuis stderr
+/// Parser de stats `FFmpeg` depuis stderr
 pub struct StatsParser {
     stats: EncodingStats,
 }
 
 impl StatsParser {
+    #[must_use]
     pub fn new(total_frames: Option<u64>, total_duration: Option<Duration>) -> Self {
         let stats = EncodingStats {
             total_frames,
@@ -121,17 +124,19 @@ impl StatsParser {
     }
 
     /// Obtenir les stats actuelles
+    #[must_use]
     pub fn get_stats(&self) -> &EncodingStats {
         &self.stats
     }
 
     /// Obtenir une copie des stats
+    #[must_use]
     pub fn clone_stats(&self) -> EncodingStats {
         self.stats.clone()
     }
 
-    /// Parser une ligne de sortie SvtAv1EncApp ou aomenc
-    /// Format SvtAv1EncApp: "Encoding frame   3456 1234.56 kbps 210.12 fps"
+    /// Parser une ligne de sortie `SvtAv1EncApp` ou aomenc
+    /// Format `SvtAv1EncApp`: "Encoding frame   3456 1234.56 kbps 210.12 fps"
     /// Format aomenc: "Pass 1/2 frame  268/229    54960B   14288 ms 18.76 fps [ETA  unknown]"
     pub fn parse_encoder_line(&mut self, line: &str) {
         // Essayer le format SVT-AV1 d'abord
@@ -182,6 +187,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_parse_ffmpeg_line() {
         let mut parser = StatsParser::new(Some(1000), None);
 

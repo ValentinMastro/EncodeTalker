@@ -41,6 +41,7 @@ pub struct Request {
 }
 
 impl Request {
+    #[must_use]
     pub fn new(payload: RequestPayload) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -94,6 +95,7 @@ pub struct Response {
 }
 
 impl Response {
+    #[must_use]
     pub fn new(request_id: Uuid, payload: ResponsePayload) -> Self {
         Self {
             request_id,
@@ -101,10 +103,12 @@ impl Response {
         }
     }
 
+    #[must_use]
     pub fn ok(request_id: Uuid) -> Self {
         Self::new(request_id, ResponsePayload::Ok)
     }
 
+    #[must_use]
     pub fn error(request_id: Uuid, message: String) -> Self {
         Self::new(request_id, ResponsePayload::Error { message })
     }
@@ -143,6 +147,7 @@ pub struct Event {
 }
 
 impl Event {
+    #[must_use]
     pub fn new(payload: EventPayload) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -176,7 +181,7 @@ pub enum EventPayload {
     },
     /// Progression de compilation d'une dépendance
     DepsCompilationProgress {
-        /// Nom de la dépendance (ex: "FFmpeg", "SVT-AV1-PSY")
+        /// Nom de la dépendance (ex: `FFmpeg`, `SVT-AV1-PSY`)
         dep_name: String,
         /// Index de la dépendance (0-based)
         dep_index: usize,

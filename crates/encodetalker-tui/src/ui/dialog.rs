@@ -1,5 +1,8 @@
 use crate::app::{AppState, Dialog};
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+};
 
 /// Rendre un dialogue par-dessus l'interface
 pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -13,6 +16,7 @@ pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Rendre le dialogue de configuration d'encodage
+#[allow(clippy::too_many_lines)]
 fn render_encode_config_dialog(
     frame: &mut Frame,
     area: Rect,
@@ -93,7 +97,7 @@ fn render_encode_config_dialog(
         let chars: Vec<char> = config.output_path_string.chars().collect();
         let before: String = chars[..config.output_path_cursor].iter().collect();
         let after: String = chars[config.output_path_cursor..].iter().collect();
-        format!("Output: {}█{}", before, after)
+        format!("Output: {before}█{after}")
     } else if config.selected_field == 5 {
         format!("Output: {} [→ to edit]", config.output_path_string)
     } else {
@@ -118,11 +122,11 @@ fn render_encode_config_dialog(
     // Audio mode
     let audio_text = match &config.config.audio_mode {
         encodetalker_common::AudioMode::Opus { bitrate } => {
-            format!("Audio:   Opus {} kbps", bitrate)
+            format!("Audio:   Opus {bitrate} kbps")
         }
         encodetalker_common::AudioMode::Copy => "Audio:   Copie".to_string(),
         encodetalker_common::AudioMode::Custom { codec, bitrate } => {
-            format!("Audio:   {} {} kbps", codec, bitrate)
+            format!("Audio:   {codec} {bitrate} kbps")
         }
     };
     let audio_style = if config.selected_field == 1 {
@@ -171,13 +175,13 @@ fn render_encode_config_dialog(
 
     // Threads
     let max_threads = std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(16);
 
     let threads_text = if let Some(threads) = config.config.encoder_params.threads {
-        format!("Threads: {} (1-{}, Auto = use all)", threads, max_threads)
+        format!("Threads: {threads} (1-{max_threads}, Auto = use all)")
     } else {
-        format!("Threads: Auto (1-{})", max_threads)
+        format!("Threads: Auto (1-{max_threads})")
     };
 
     let threads_style = if config.selected_field == 4 {

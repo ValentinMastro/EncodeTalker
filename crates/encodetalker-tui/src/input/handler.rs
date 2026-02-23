@@ -6,7 +6,7 @@ use encodetalker_common::{AudioMode, EncoderType};
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
     // Si on est en Loading, bloquer toutes les touches sauf 'q'
     if state.current_view == View::Loading {
-        if matches!(key.code, KeyCode::Char('q') | KeyCode::Char('Q')) {
+        if matches!(key.code, KeyCode::Char('q' | 'Q')) {
             state.dialog = Some(Dialog::Confirm {
                 message: "Voulez-vous quitter l'application ?\n(La compilation continuera en arrière-plan)".to_string(),
                 on_confirm: ConfirmAction::Quit,
@@ -22,7 +22,7 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
 
     // Gestion des touches globales
     match key.code {
-        KeyCode::Char('q') | KeyCode::Char('Q') => {
+        KeyCode::Char('q' | 'Q') => {
             // Ctrl+Q : Quitter directement sans confirmation
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 state.should_quit = true;
@@ -376,9 +376,26 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                     return InputAction::None;
                 }
 
-                let encoding_config = config.config.clone();
+                // Early return pour clarté
+                if !config.is_batch() {
+                    // Single job: comportement actuel
+                    let input_path = config.input_paths[0].clone();
+                    let output_path = config.output_path.clone();
+                    let encoding_config = config.config.clone();
 
-                if config.is_batch() {
+                    state.dialog = None;
+                    state.set_status("Job ajouté à la queue");
+
+                    return InputAction::AddJob {
+                        input_path,
+                        output_path,
+                        config: encoding_config,
+                    };
+                }
+
+                // Batch jobs
+                {
+                    let encoding_config = config.config.clone();
                     // Créer plusieurs jobs
                     let jobs: Vec<(std::path::PathBuf, std::path::PathBuf)> = config
                         .input_paths
@@ -399,19 +416,6 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                         jobs,
                         config: encoding_config,
                     };
-                } else {
-                    // Single job: comportement actuel
-                    let input_path = config.input_paths[0].clone();
-                    let output_path = config.output_path.clone();
-
-                    state.dialog = None;
-                    state.set_status("Job ajouté à la queue");
-
-                    return InputAction::AddJob {
-                        input_path,
-                        output_path,
-                        config: encoding_config,
-                    };
                 }
             }
             _ => {}
@@ -429,6 +433,7 @@ fn generate_output_path(input: &std::path::Path) -> std::path::PathBuf {
 }
 
 /// Changer la valeur d'un champ dans le dialogue de config
+#[allow(clippy::match_same_arms)]
 fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
     match config.selected_field {
         0 => {
@@ -442,8 +447,7 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             // Audio mode
             config.config.audio_mode = match config.config.audio_mode {
                 AudioMode::Opus { .. } => AudioMode::Copy,
-                AudioMode::Copy => AudioMode::Opus { bitrate: 128 },
-                AudioMode::Custom { .. } => AudioMode::Opus { bitrate: 128 },
+                AudioMode::Copy | AudioMode::Custom { .. } => AudioMode::Opus { bitrate: 128 },
             };
         }
         2 => {
@@ -468,6 +472,7 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
         }
         4 => {
             // Threads
+            #[allow(clippy::cast_possible_truncation)]
             let max_threads = std::thread::available_parallelism()
                 .map(|n| n.get() as u32)
                 .unwrap_or(16);
@@ -499,9 +504,11 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             }
         }
         5 => {
-            // Output path : géré par le mode édition, ne rien faire ici
+            // Output path: géré par le mode édition, ne rien faire ici
         }
-        _ => {}
+        _ => {
+            // Autres cas: ne rien faire
+        }
     }
 }
 
@@ -512,11 +519,7 @@ fn handle_confirm_dialog_key(
     on_confirm: ConfirmAction,
 ) -> InputAction {
     match key.code {
-        KeyCode::Char('y')
-        | KeyCode::Char('Y')
-        | KeyCode::Char('o')
-        | KeyCode::Char('O')
-        | KeyCode::Enter => {
+        KeyCode::Char('y' | 'Y' | 'o' | 'O') | KeyCode::Enter => {
             // Confirmer
             state.dialog = None;
 
@@ -549,7 +552,7 @@ fn handle_confirm_dialog_key(
 
             InputAction::None
         }
-        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+        KeyCode::Char('n' | 'N') | KeyCode::Esc => {
             // Annuler
             state.dialog = None;
             InputAction::None

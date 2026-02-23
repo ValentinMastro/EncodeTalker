@@ -16,6 +16,10 @@ pub enum IpcStream {
 
 impl IpcStream {
     /// Se connecter au daemon (client)
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la connexion au socket Unix ou au Named Pipe échoue.
     pub async fn connect(path: impl AsRef<Path>) -> Result<Self> {
         #[cfg(unix)]
         {

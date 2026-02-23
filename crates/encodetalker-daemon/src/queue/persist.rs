@@ -21,11 +21,16 @@ pub struct Persistence {
 }
 
 impl Persistence {
+    #[must_use]
     pub fn new(state_file: PathBuf) -> Self {
         Self { state_file }
     }
 
     /// Charger l'état depuis le disque
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier ne peut pas être lu ou si le parsing JSON échoue.
     pub async fn load(&self) -> Result<PersistedState> {
         if !self.state_file.exists() {
             info!("Fichier d'état non trouvé, démarrage avec état vide");
@@ -50,6 +55,10 @@ impl Persistence {
     }
 
     /// Sauvegarder l'état sur le disque (écriture atomique)
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier ne peut pas être créé, écrit ou si le rename atomique échoue.
     pub async fn save(&self, state: &PersistedState) -> Result<()> {
         let json =
             serde_json::to_string_pretty(state).context("Échec de sérialisation de l'état")?;

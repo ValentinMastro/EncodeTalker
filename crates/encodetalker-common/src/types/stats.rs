@@ -45,6 +45,7 @@ impl Default for EncodingStats {
 
 impl EncodingStats {
     /// Calculer la progression en pourcentage
+    #[allow(clippy::cast_precision_loss)]
     pub fn calculate_progress(&mut self) {
         if let Some(total) = self.total_frames {
             if total > 0 {
@@ -60,6 +61,7 @@ impl EncodingStats {
     }
 
     /// Calculer l'ETA basé sur le FPS actuel
+    #[allow(clippy::cast_precision_loss)]
     pub fn calculate_eta(&mut self) {
         if let Some(total) = self.total_frames {
             let remaining = total.saturating_sub(self.frame);

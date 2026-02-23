@@ -18,6 +18,7 @@ pub struct EncodingPipeline {
 }
 
 impl EncodingPipeline {
+    #[must_use]
     pub fn new(
         ffmpeg_bin: PathBuf,
         ffprobe_bin: PathBuf,
@@ -35,6 +36,14 @@ impl EncodingPipeline {
     }
 
     /// Encoder un job complet
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le probe, l'encodage vidéo, l'encodage audio ou le muxage échoue.
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si `job.output_path.parent()` retourne `None`.
     pub async fn encode_job(
         &self,
         job: &EncodingJob,
@@ -142,6 +151,7 @@ impl EncodingPipeline {
     }
 
     /// Lancer une passe d'encodage (ffmpeg → encodeur via pipe kernel)
+    #[allow(clippy::too_many_lines)]
     async fn run_encode_pass(
         &self,
         job: &EncodingJob,
@@ -330,7 +340,7 @@ impl EncodingPipeline {
         Ok(())
     }
 
-    /// Construire la commande SVT-AV1 (std::process)
+    /// Construire la commande SVT-AV1 (`std::process`)
     fn build_svt_av1_std_command(&self, job: &EncodingJob, output: &Path) -> std::process::Command {
         let mut cmd = std::process::Command::new(&self.svt_av1_bin);
 
@@ -359,7 +369,7 @@ impl EncodingPipeline {
         cmd
     }
 
-    /// Construire la commande aomenc pour une passe donnée (std::process)
+    /// Construire la commande aomenc pour une passe donnée (`std::process`)
     fn build_aom_std_command(
         &self,
         job: &EncodingJob,
@@ -373,16 +383,17 @@ impl EncodingPipeline {
             .arg(format!("--cpu-used={}", job.config.encoder_params.preset))
             .arg("--end-usage=q")
             .arg("--passes=2")
-            .arg(format!("--pass={}", pass))
+            .arg(format!("--pass={pass}"))
             .arg(format!("--fpf={}", fpf_path.display()));
 
         // Ajouter threads (auto-detect si None)
+        #[allow(clippy::cast_possible_truncation)]
         let threads = job.config.encoder_params.threads.unwrap_or_else(|| {
             std::thread::available_parallelism()
                 .map(|n| n.get() as u32)
                 .unwrap_or(1)
         });
-        cmd.arg(format!("--threads={}", threads));
+        cmd.arg(format!("--threads={threads}"));
 
         // --ivf seulement pour la passe 2 (passe 1 écrit dans /dev/null)
         if pass == 2 {
@@ -415,12 +426,12 @@ impl EncodingPipeline {
                     .arg("-c:a")
                     .arg("libopus")
                     .arg("-b:a")
-                    .arg(format!("{}k", bitrate));
+                    .arg(format!("{bitrate}k"));
 
                 // Sélectionner les streams audio spécifiques si configuré
                 if let Some(streams) = &job.config.audio_streams {
-                    for stream_idx in streams.iter() {
-                        cmd.arg("-map").arg(format!("0:a:{}", stream_idx));
+                    for stream_idx in streams {
+                        cmd.arg("-map").arg(format!("0:a:{stream_idx}"));
                     }
                 } else {
                     cmd.arg("-map").arg("0:a"); // Tous les streams audio
@@ -432,7 +443,7 @@ impl EncodingPipeline {
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    anyhow::bail!("Encodage audio échoué: {}", stderr);
+                    anyhow::bail!("Encodage audio échoué: {stderr}");
                 }
             }
             AudioMode::Copy => {
@@ -446,7 +457,7 @@ impl EncodingPipeline {
 
                 if let Some(streams) = &job.config.audio_streams {
                     for stream_idx in streams {
-                        cmd.arg("-map").arg(format!("0:a:{}", stream_idx));
+                        cmd.arg("-map").arg(format!("0:a:{stream_idx}"));
                     }
                 } else {
                     cmd.arg("-map").arg("0:a");
@@ -458,7 +469,7 @@ impl EncodingPipeline {
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    anyhow::bail!("Copie audio échouée: {}", stderr);
+                    anyhow::bail!("Copie audio échouée: {stderr}");
                 }
             }
             AudioMode::Custom { codec, bitrate } => {
@@ -470,7 +481,7 @@ impl EncodingPipeline {
                     .arg("-c:a")
                     .arg(codec)
                     .arg("-b:a")
-                    .arg(format!("{}k", bitrate))
+                    .arg(format!("{bitrate}k"))
                     .arg(output);
 
                 let output = cmd
@@ -480,7 +491,7 @@ impl EncodingPipeline {
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    anyhow::bail!("Encodage audio custom échoué: {}", stderr);
+                    anyhow::bail!("Encodage audio custom échoué: {stderr}");
                 }
             }
         }
@@ -521,7 +532,7 @@ impl EncodingPipeline {
         if !video_info.subtitle_streams.is_empty() {
             if let Some(streams) = &job.config.subtitle_streams {
                 for stream_idx in streams {
-                    cmd.arg("-map").arg(format!("2:s:{}", stream_idx));
+                    cmd.arg("-map").arg(format!("2:s:{stream_idx}"));
                 }
             } else {
                 // Par défaut, copier tous les sous-titres
@@ -543,7 +554,7 @@ impl EncodingPipeline {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("Muxage ffmpeg échoué: {}", stderr);
+            anyhow::bail!("Muxage ffmpeg échoué: {stderr}");
         }
 
         info!("Muxage réussi");

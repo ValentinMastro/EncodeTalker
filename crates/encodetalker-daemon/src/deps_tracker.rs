@@ -26,6 +26,7 @@ pub struct DepsCompilationTracker {
 
 impl DepsCompilationTracker {
     /// Créer un nouveau tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(DepsCompilationState::default())),
@@ -33,6 +34,11 @@ impl DepsCompilationTracker {
     }
 
     /// Obtenir l'état actuel
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
+    #[must_use]
     pub fn get_status(&self) -> DepsStatusInfo {
         let state = self.state.read().unwrap();
         DepsStatusInfo {
@@ -46,6 +52,10 @@ impl DepsCompilationTracker {
     }
 
     /// Marquer toutes les dépendances comme présentes
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn set_all_present(&self) {
         let mut state = self.state.write().unwrap();
         state.all_present = true;
@@ -55,6 +65,10 @@ impl DepsCompilationTracker {
     }
 
     /// Démarrer la compilation
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn start_compilation(&self, total_deps: usize) {
         let mut state = self.state.write().unwrap();
         state.all_present = false;
@@ -66,6 +80,10 @@ impl DepsCompilationTracker {
     }
 
     /// Définir la dépendance et l'étape courante
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn set_current(&self, dep_name: String, step: DepsCompilationStep) {
         let mut state = self.state.write().unwrap();
         state.current_dep = Some(dep_name);
@@ -73,12 +91,20 @@ impl DepsCompilationTracker {
     }
 
     /// Marquer une dépendance comme complétée
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn complete_dep(&self) {
         let mut state = self.state.write().unwrap();
         state.completed_count += 1;
     }
 
     /// Terminer la compilation avec succès
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn finish_compilation(&self) {
         let mut state = self.state.write().unwrap();
         state.all_present = true;
@@ -88,6 +114,10 @@ impl DepsCompilationTracker {
     }
 
     /// Terminer la compilation avec erreur
+    ///
+    /// # Panics
+    ///
+    /// Peut paniquer si le lock est empoisonné (thread panic pendant le write).
     pub fn fail_compilation(&self) {
         let mut state = self.state.write().unwrap();
         state.compiling = false;

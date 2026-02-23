@@ -18,7 +18,7 @@ pub struct DaemonConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonSettings {
     pub max_concurrent_jobs: usize,
-    /// DÉPRÉCIÉ: utiliser [paths].socket_path dans config.toml à la place
+    /// DÉPRÉCIÉ: utiliser [paths].`socket_path` dans config.toml à la place
     /// Gardé pour rétrocompatibilité mais ignoré par le daemon
     #[serde(default = "default_socket_path")]
     pub socket_path: String,
@@ -115,6 +115,10 @@ impl Default for DaemonConfig {
 
 impl DaemonConfig {
     /// Charger la configuration depuis un fichier TOML
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier ne peut pas être lu ou si le parsing TOML échoue.
     pub fn load_from_file(path: &PathBuf) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let config: DaemonConfig = toml::from_str(&content)?;
@@ -122,6 +126,7 @@ impl DaemonConfig {
     }
 
     /// Charger la configuration avec fallback sur défaut
+    #[must_use]
     pub fn load_or_default(path: &PathBuf) -> Self {
         Self::load_from_file(path).unwrap_or_else(|_| {
             tracing::warn!(

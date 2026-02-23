@@ -17,6 +17,7 @@ use encodetalker_tui::{
 };
 
 #[tokio::main]
+#[allow(clippy::too_many_lines)]
 async fn main() -> Result<()> {
     // Initialiser le logging
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
@@ -56,7 +57,7 @@ async fn main() -> Result<()> {
 
     info!("Vérification du daemon...");
     if let Err(e) = ensure_daemon_running(&daemon_bin, &paths.socket_path).await {
-        eprintln!("Échec du démarrage du daemon: {}", e);
+        eprintln!("Échec du démarrage du daemon: {e}");
         eprintln!(
             "Assurez-vous que le binaire encodetalker-daemon est présent dans le même répertoire."
         );
@@ -150,7 +151,7 @@ async fn main() -> Result<()> {
                             .await
                         {
                             Ok(job_id) => {
-                                app_state.set_status(format!("Job {} ajouté", job_id));
+                                app_state.set_status(format!("Job {job_id} ajouté"));
                                 // Rafraîchir les listes
                                 if let Ok((queue, active, history)) = client.refresh_all().await {
                                     app_state.queue_jobs = queue;
@@ -160,7 +161,7 @@ async fn main() -> Result<()> {
                             }
                             Err(e) => {
                                 app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de l'ajout du job: {}", e),
+                                    message: format!("Échec de l'ajout du job: {e}"),
                                 });
                             }
                         }
@@ -184,13 +185,13 @@ async fn main() -> Result<()> {
                                         .unwrap_or_default()
                                         .to_string_lossy()
                                         .to_string();
-                                    errors.push(format!("{}: {}", filename, e));
+                                    errors.push(format!("{filename}: {e}"));
                                 }
                             }
                         }
 
                         if success_count == total {
-                            app_state.set_status(format!("{} jobs ajoutés avec succès", total));
+                            app_state.set_status(format!("{total} jobs ajoutés avec succès"));
                         } else {
                             app_state.dialog = Some(encodetalker_tui::Dialog::Error {
                                 message: format!(
@@ -212,7 +213,7 @@ async fn main() -> Result<()> {
                     InputAction::CancelJob { job_id } => {
                         match client.cancel_job(job_id).await {
                             Ok(()) => {
-                                app_state.set_status(format!("Job {} annulé", job_id));
+                                app_state.set_status(format!("Job {job_id} annulé"));
                                 // Rafraîchir les listes
                                 if let Ok((queue, active, history)) = client.refresh_all().await {
                                     app_state.queue_jobs = queue;
@@ -222,7 +223,7 @@ async fn main() -> Result<()> {
                             }
                             Err(e) => {
                                 app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de l'annulation: {}", e),
+                                    message: format!("Échec de l'annulation: {e}"),
                                 });
                             }
                         }
@@ -230,7 +231,7 @@ async fn main() -> Result<()> {
                     InputAction::RetryJob { job_id } => {
                         match client.retry_job(job_id).await {
                             Ok(()) => {
-                                app_state.set_status(format!("Job {} relancé", job_id));
+                                app_state.set_status(format!("Job {job_id} relancé"));
                                 // Rafraîchir les listes
                                 if let Ok((queue, active, history)) = client.refresh_all().await {
                                     app_state.queue_jobs = queue;
@@ -240,7 +241,7 @@ async fn main() -> Result<()> {
                             }
                             Err(e) => {
                                 app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec du retry: {}", e),
+                                    message: format!("Échec du retry: {e}"),
                                 });
                             }
                         }
@@ -259,7 +260,7 @@ async fn main() -> Result<()> {
                             }
                             Err(e) => {
                                 app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de la suppression: {}", e),
+                                    message: format!("Échec de la suppression: {e}"),
                                 });
                             }
                         }
@@ -271,7 +272,7 @@ async fn main() -> Result<()> {
                         }
                         Err(e) => {
                             app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                message: format!("Échec du clear: {}", e),
+                                message: format!("Échec du clear: {e}"),
                             });
                         }
                     },
@@ -351,7 +352,7 @@ async fn main() -> Result<()> {
                     } => {
                         error!("Échec de compilation de {}: {}", dep_name, error);
                         if let Some(loading) = &mut app_state.loading_state {
-                            loading.error = Some(format!("{}: {}", dep_name, error));
+                            loading.error = Some(format!("{dep_name}: {error}"));
                         }
                     }
                 }
