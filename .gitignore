@@ -26,6 +26,10 @@ state.json
 *.avi
 *.mov
 *.webm
+*.flv
+*.wmv
+*.m4v
+*.m2ts
 
 # Flux vidéos
 *.ivf
