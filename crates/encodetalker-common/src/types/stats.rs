@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::time::Duration;
 
 /// Statistiques d'encodage en temps réel
@@ -32,6 +33,8 @@ pub struct EncodingStats {
     pub vmaf_max: Option<f64>,
     /// En cours de calcul VMAF
     pub is_calculating_vmaf: bool,
+    /// Chemin vers le fichier JSON contenant les scores VMAF par frame
+    pub vmaf_json_path: Option<PathBuf>,
 }
 
 impl Default for EncodingStats {
@@ -51,6 +54,7 @@ impl Default for EncodingStats {
             vmaf_min: None,
             vmaf_max: None,
             is_calculating_vmaf: false,
+            vmaf_json_path: None,
         }
     }
 }

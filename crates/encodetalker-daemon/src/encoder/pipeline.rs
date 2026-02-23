@@ -596,9 +596,15 @@ impl EncodingPipeline {
         };
         let _ = stats_tx.send(vmaf_stats.clone());
 
-        // Préparer le fichier JSON temporaire pour le log VMAF
-        let temp_dir = job.output_path.parent().unwrap();
-        let vmaf_log = temp_dir.join(format!("{}_vmaf.json", uuid::Uuid::new_v4()));
+        // Préparer le fichier JSON pour le log VMAF (conservé à côté de l'output)
+        let vmaf_log = {
+            let stem = job
+                .output_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            job.output_path.with_file_name(format!("{stem}_vmaf.json"))
+        };
 
         // Déterminer le nombre de threads
         #[allow(clippy::cast_possible_truncation)]
@@ -644,29 +650,53 @@ impl EncodingPipeline {
         let stats_tx_clone = stats_tx.clone();
 
         let stderr_handle = std::thread::spawn(move || {
-            let reader = BufReader::new(ffmpeg_stderr);
+            use std::io::Read;
 
-            for line in reader.lines().map_while(Result::ok) {
-                // ffmpeg écrit la progression sous forme: "frame=  123 fps= 45.2 ..."
-                if let Some(frame_str) = line
-                    .strip_prefix("frame=")
-                    .or_else(|| line.find("frame=").map(|pos| &line[pos + 6..]))
-                {
-                    if let Some(frame_num) = frame_str
-                        .split_whitespace()
-                        .next()
-                        .and_then(|s| s.parse::<u64>().ok())
-                    {
-                        let mut stats = EncodingStats {
-                            frame: frame_num,
-                            total_frames,
-                            is_calculating_vmaf: true,
-                            ..EncodingStats::default()
-                        };
-                        stats.calculate_progress();
-                        if stats_tx_clone.send(stats).is_err() {
-                            break;
+            let mut reader = BufReader::new(ffmpeg_stderr);
+            let mut buffer = Vec::new();
+            let mut byte = [0u8; 1];
+
+            // ffmpeg écrit la progression avec \r (retour chariot), pas \n
+            // Il faut lire byte par byte et splitter sur \r ET \n
+            loop {
+                match reader.read(&mut byte) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        if byte[0] == b'\r' || byte[0] == b'\n' {
+                            if !buffer.is_empty() {
+                                if let Ok(line) = String::from_utf8(buffer.clone()) {
+                                    let line = line.trim();
+                                    if let Some(frame_str) = line
+                                        .strip_prefix("frame=")
+                                        .or_else(|| line.find("frame=").map(|pos| &line[pos + 6..]))
+                                    {
+                                        if let Some(frame_num) = frame_str
+                                            .split_whitespace()
+                                            .next()
+                                            .and_then(|s| s.parse::<u64>().ok())
+                                        {
+                                            let mut stats = EncodingStats {
+                                                frame: frame_num,
+                                                total_frames,
+                                                is_calculating_vmaf: true,
+                                                ..EncodingStats::default()
+                                            };
+                                            stats.calculate_progress();
+                                            if stats_tx_clone.send(stats).is_err() {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                buffer.clear();
+                            }
+                        } else {
+                            buffer.push(byte[0]);
                         }
+                    }
+                    Err(e) => {
+                        tracing::error!("Erreur lecture stderr ffmpeg VMAF: {e}");
+                        break;
                     }
                 }
             }
@@ -743,13 +773,14 @@ impl EncodingPipeline {
         vmaf_stats.vmaf_score = vmaf_mean;
         vmaf_stats.vmaf_min = vmaf_min;
         vmaf_stats.vmaf_max = vmaf_max;
+        vmaf_stats.vmaf_json_path = Some(vmaf_log.clone());
         vmaf_stats.progress_percent = 100.0;
         let _ = stats_tx.send(vmaf_stats);
 
-        // Nettoyer le fichier JSON temporaire
-        let _ = tokio::fs::remove_file(&vmaf_log).await;
-
-        info!("Calcul VMAF terminé");
+        info!(
+            "Calcul VMAF terminé, JSON sauvegardé: {}",
+            vmaf_log.display()
+        );
         Ok(())
     }
 }
