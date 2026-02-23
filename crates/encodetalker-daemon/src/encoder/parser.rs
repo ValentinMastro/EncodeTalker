@@ -13,6 +13,10 @@ static TIME_REGEX: Lazy<Regex> =
 static ENCODER_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"Encoding\s+frame\s+(\d+)\s+([\d.]+)\s+kbps\s+([\d.]+)\s+fps").unwrap()
 });
+// Format aomenc: "Pass 1/2 frame  268/229    54960B   14288 ms 18.76 fps [ETA  unknown]"
+static AOMENC_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"Pass\s+(\d)/(\d)\s+frame\s+(\d+)/\d+\s+\d+B\s+\d+\s+ms\s+([\d.]+)\s+fps").unwrap()
+});
 
 /// Parser de stats FFmpeg depuis stderr
 pub struct StatsParser {
@@ -128,7 +132,9 @@ impl StatsParser {
 
     /// Parser une ligne de sortie SvtAv1EncApp ou aomenc
     /// Format SvtAv1EncApp: "Encoding frame   3456 1234.56 kbps 210.12 fps"
+    /// Format aomenc: "Pass 1/2 frame  268/229    54960B   14288 ms 18.76 fps [ETA  unknown]"
     pub fn parse_encoder_line(&mut self, line: &str) {
+        // Essayer le format SVT-AV1 d'abord
         if let Some(caps) = ENCODER_REGEX.captures(line) {
             if let Ok(frame) = caps[1].parse::<u64>() {
                 self.stats.frame = frame;
@@ -139,9 +145,35 @@ impl StatsParser {
             if let Ok(fps) = caps[3].parse::<f64>() {
                 self.stats.fps = fps;
             }
-            // Recalculer progression et ETA
+            self.stats.update();
+            return;
+        }
+        // Essayer le format aomenc
+        if let Some(caps) = AOMENC_REGEX.captures(line) {
+            if let Ok(pass) = caps[1].parse::<u32>() {
+                self.stats.current_pass = pass;
+            }
+            if let Ok(total) = caps[2].parse::<u32>() {
+                self.stats.total_passes = total;
+            }
+            if let Ok(frame) = caps[3].parse::<u64>() {
+                self.stats.frame = frame;
+            }
+            if let Ok(fps) = caps[4].parse::<f64>() {
+                self.stats.fps = fps;
+            }
             self.stats.update();
         }
+    }
+
+    /// Réinitialiser les stats pour une nouvelle passe
+    pub fn reset_for_pass(&mut self, pass: u32) {
+        self.stats.frame = 0;
+        self.stats.fps = 0.0;
+        self.stats.bitrate = 0.0;
+        self.stats.progress_percent = 0.0;
+        self.stats.eta = None;
+        self.stats.current_pass = pass;
     }
 }
 
