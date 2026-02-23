@@ -109,6 +109,24 @@ check_ffmpeg() {
     echo "     Expected at: $ffprobe_path"
 }
 
+# Fonction : Vérifier libvmaf
+check_vmaf() {
+    echo "Checking libvmaf..."
+
+    local status="✗"
+
+    if [[ -f "$DEPS_DIR/lib/libvmaf.a" ]] || [[ -f "$DEPS_DIR/lib/libvmaf.so" ]]; then
+        status="✓"
+        DEPS_OK=$((DEPS_OK + 1))
+        echo "  $status libvmaf: $DEPS_DIR/lib/"
+        return 0
+    fi
+
+    DEPS_MISSING=$((DEPS_MISSING + 1))
+    echo "  $status libvmaf: MISSING"
+    echo "     Expected at: $DEPS_DIR/lib/libvmaf.a"
+}
+
 # Fonction 2 : Vérifier SVT-AV1-PSY
 check_svt_av1() {
     echo "Checking SVT-AV1-PSY..."
@@ -174,14 +192,15 @@ main() {
     check_opus
     check_libvpx
     check_dav1d
+    check_vmaf
     check_ffmpeg
     check_svt_av1
     check_aomenc
 
     echo ""
     echo "=== Summary ==="
-    echo "  Dependencies OK:      $DEPS_OK/6"
-    echo "  Dependencies missing: $DEPS_MISSING/6"
+    echo "  Dependencies OK:      $DEPS_OK/7"
+    echo "  Dependencies missing: $DEPS_MISSING/7"
 
     if [[ $DEPS_MISSING -eq 0 ]]; then
         exit 0

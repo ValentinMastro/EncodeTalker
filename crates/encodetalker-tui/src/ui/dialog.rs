@@ -59,6 +59,7 @@ fn render_encode_config_dialog(
             Constraint::Length(3), // CRF
             Constraint::Length(3), // Preset
             Constraint::Length(3), // Threads
+            Constraint::Length(3), // VMAF
             Constraint::Length(2), // Instructions
         ])
         .split(inner);
@@ -73,7 +74,7 @@ fn render_encode_config_dialog(
     frame.render_widget(input, chunks[0]);
 
     // Output file (éditable) - Style grisé si batch
-    let output_style = if config.selected_field == 5 && !config.is_batch() {
+    let output_style = if config.selected_field == 6 && !config.is_batch() {
         if config.is_editing_output {
             Style::default()
                 .fg(Color::Green)
@@ -98,7 +99,7 @@ fn render_encode_config_dialog(
         let before: String = chars[..config.output_path_cursor].iter().collect();
         let after: String = chars[config.output_path_cursor..].iter().collect();
         format!("Output: {before}█{after}")
-    } else if config.selected_field == 5 {
+    } else if config.selected_field == 6 {
         format!("Output: {} [→ to edit]", config.output_path_string)
     } else {
         format!("Output: {}", config.output_path_string)
@@ -194,6 +195,22 @@ fn render_encode_config_dialog(
     let threads = Paragraph::new(threads_text).style(threads_style);
     frame.render_widget(threads, chunks[6]);
 
+    // VMAF
+    let vmaf_text = if config.config.enable_vmaf {
+        "VMAF:    [x] Calculer le score VMAF après encodage"
+    } else {
+        "VMAF:    [ ] Calculer le score VMAF après encodage"
+    };
+    let vmaf_style = if config.selected_field == 5 {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let vmaf = Paragraph::new(vmaf_text).style(vmaf_style);
+    frame.render_widget(vmaf, chunks[7]);
+
     // Instructions - Adaptées au batch
     let instructions_text = if config.is_editing_output {
         "←→: Déplacer curseur | Caractère: Insérer | Backspace/Suppr: Effacer | Entrée: Valider | ESC: Annuler"
@@ -205,7 +222,7 @@ fn render_encode_config_dialog(
     let instructions = Paragraph::new(instructions_text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(instructions, chunks[7]);
+    frame.render_widget(instructions, chunks[8]);
 }
 
 /// Rendre le dialogue de confirmation

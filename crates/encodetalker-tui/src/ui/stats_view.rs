@@ -69,82 +69,13 @@ fn render_active_job(
         .border_style(border_style);
 
     if let Some(stats) = &job.stats {
-        let progress = stats.progress_percent;
-
-        let eta_text = if let Some(eta) = stats.eta {
-            let secs = eta.as_secs();
-            let hours = secs / 3600;
-            let mins = (secs % 3600) / 60;
-            let secs = secs % 60;
-            format!("ETA: {hours:02}:{mins:02}:{secs:02}")
-        } else {
-            "ETA: --:--:--".to_string()
-        };
-
-        let info_text = format!(
-            "Frame: {} | FPS: {:.1} | Bitrate: {:.1} kbps | {}",
-            stats.frame, stats.fps, stats.bitrate, eta_text
-        );
-
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        let info_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(3),
-            ])
-            .split(inner);
-
-        let info = Paragraph::new(info_text).style(Style::default().fg(Color::White));
-        frame.render_widget(info, info_chunks[1]);
-
-        if stats.total_passes > 1 {
-            // Double barre de progression (aomenc 2 passes)
-            let pass1_progress = if stats.current_pass == 1 {
-                stats.progress_percent
-            } else {
-                100.0
-            };
-            let pass2_progress = if stats.current_pass == 2 {
-                stats.progress_percent
-            } else {
-                0.0
-            };
-
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let gauge1 = Gauge::default()
-                .block(Block::default().borders(Borders::NONE))
-                .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
-                .percent(pass1_progress.min(100.0) as u16)
-                .label(format!("Passe 1: {pass1_progress:.1}%"));
-
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let gauge2 = Gauge::default()
-                .block(Block::default().borders(Borders::NONE))
-                .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-                .percent(pass2_progress.min(100.0) as u16)
-                .label(format!("Passe 2: {pass2_progress:.1}%"));
-
-            let gauge_chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Length(1)])
-                .split(info_chunks[2]);
-
-            frame.render_widget(gauge1, gauge_chunks[0]);
-            frame.render_widget(gauge2, gauge_chunks[1]);
+        if stats.is_calculating_vmaf {
+            render_vmaf_progress(frame, inner, stats);
         } else {
-            // Barre unique (SVT-AV1)
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let gauge = Gauge::default()
-                .block(Block::default().borders(Borders::NONE))
-                .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-                .percent(progress.min(100.0) as u16)
-                .label(format!("{progress:.1}%"));
-
-            frame.render_widget(gauge, info_chunks[2]);
+            render_encoding_progress(frame, inner, stats);
         }
     } else {
         let text = Paragraph::new("Démarrage...")
@@ -152,6 +83,124 @@ fn render_active_job(
             .alignment(Alignment::Center)
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(text, area);
+    }
+}
+
+/// Rendre la progression du calcul VMAF
+fn render_vmaf_progress(
+    frame: &mut Frame,
+    inner: Rect,
+    stats: &encodetalker_common::EncodingStats,
+) {
+    let vmaf_info = format!(
+        "Calcul VMAF... Frame: {} / {}",
+        stats.frame,
+        stats
+            .total_frames
+            .map_or("?".to_string(), |t| t.to_string())
+    );
+
+    let info_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner);
+
+    let info = Paragraph::new(vmaf_info).style(Style::default().fg(Color::Cyan));
+    frame.render_widget(info, info_chunks[1]);
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let gauge = Gauge::default()
+        .block(Block::default().borders(Borders::NONE))
+        .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
+        .percent(stats.progress_percent.min(100.0) as u16)
+        .label(format!("VMAF: {:.1}%", stats.progress_percent));
+
+    frame.render_widget(gauge, info_chunks[2]);
+}
+
+/// Rendre la progression de l'encodage vidéo
+fn render_encoding_progress(
+    frame: &mut Frame,
+    inner: Rect,
+    stats: &encodetalker_common::EncodingStats,
+) {
+    let progress = stats.progress_percent;
+
+    let eta_text = if let Some(eta) = stats.eta {
+        let secs = eta.as_secs();
+        let hours = secs / 3600;
+        let mins = (secs % 3600) / 60;
+        let secs = secs % 60;
+        format!("ETA: {hours:02}:{mins:02}:{secs:02}")
+    } else {
+        "ETA: --:--:--".to_string()
+    };
+
+    let info_text = format!(
+        "Frame: {} | FPS: {:.1} | Bitrate: {:.1} kbps | {}",
+        stats.frame, stats.fps, stats.bitrate, eta_text
+    );
+
+    let info_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+        ])
+        .split(inner);
+
+    let info = Paragraph::new(info_text).style(Style::default().fg(Color::White));
+    frame.render_widget(info, info_chunks[1]);
+
+    if stats.total_passes > 1 {
+        // Double barre de progression (aomenc 2 passes)
+        let pass1_progress = if stats.current_pass == 1 {
+            stats.progress_percent
+        } else {
+            100.0
+        };
+        let pass2_progress = if stats.current_pass == 2 {
+            stats.progress_percent
+        } else {
+            0.0
+        };
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let gauge1 = Gauge::default()
+            .block(Block::default().borders(Borders::NONE))
+            .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
+            .percent(pass1_progress.min(100.0) as u16)
+            .label(format!("Passe 1: {pass1_progress:.1}%"));
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let gauge2 = Gauge::default()
+            .block(Block::default().borders(Borders::NONE))
+            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+            .percent(pass2_progress.min(100.0) as u16)
+            .label(format!("Passe 2: {pass2_progress:.1}%"));
+
+        let gauge_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Length(1)])
+            .split(info_chunks[2]);
+
+        frame.render_widget(gauge1, gauge_chunks[0]);
+        frame.render_widget(gauge2, gauge_chunks[1]);
+    } else {
+        // Barre unique (SVT-AV1)
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let gauge = Gauge::default()
+            .block(Block::default().borders(Borders::NONE))
+            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+            .percent(progress.min(100.0) as u16)
+            .label(format!("{progress:.1}%"));
+
+        frame.render_widget(gauge, info_chunks[2]);
     }
 }
 
@@ -202,6 +251,12 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
                 "--:--:--".to_string()
             };
 
+            let vmaf_text = if let Some(vmaf) = job.stats.as_ref().and_then(|s| s.vmaf_score) {
+                format!(" | VMAF: {vmaf:.2}")
+            } else {
+                String::new()
+            };
+
             let started_text = match job.started_at {
                 Some(dt) => dt
                     .with_timezone(&Local)
@@ -225,7 +280,7 @@ pub fn render_history_view(frame: &mut Frame, area: Rect, state: &AppState) {
             };
 
             let text = format!(
-                "{status_icon} {filename} | Durée: {duration_text}\n  Début: {started_text}\n  Fin:   {finished_text}{error_text}"
+                "{status_icon} {filename} | Durée: {duration_text}{vmaf_text}\n  Début: {started_text}\n  Fin:   {finished_text}{error_text}"
             );
 
             ListItem::new(text).style(Style::default().fg(status_color))

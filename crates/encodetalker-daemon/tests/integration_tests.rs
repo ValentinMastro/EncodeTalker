@@ -65,6 +65,7 @@ async fn test_encode_test1_mkv_with_svt_av1() -> Result<()> {
             audio_mode: AudioMode::Opus { bitrate: 128 },
             audio_streams: None,
             subtitle_streams: None,
+            enable_vmaf: false,
         },
         created_at: chrono::Utc::now(),
         status: JobStatus::Queued,

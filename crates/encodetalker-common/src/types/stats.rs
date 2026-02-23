@@ -24,6 +24,14 @@ pub struct EncodingStats {
     pub current_pass: u32,
     /// Nombre total de passes (1 pour SVT-AV1, 2 pour aomenc)
     pub total_passes: u32,
+    /// Score VMAF moyen (0-100, None si pas encore calculé)
+    pub vmaf_score: Option<f64>,
+    /// Score VMAF minimum
+    pub vmaf_min: Option<f64>,
+    /// Score VMAF maximum
+    pub vmaf_max: Option<f64>,
+    /// En cours de calcul VMAF
+    pub is_calculating_vmaf: bool,
 }
 
 impl Default for EncodingStats {
@@ -39,6 +47,10 @@ impl Default for EncodingStats {
             eta: None,
             current_pass: 1,
             total_passes: 1,
+            vmaf_score: None,
+            vmaf_min: None,
+            vmaf_max: None,
+            is_calculating_vmaf: false,
         }
     }
 }

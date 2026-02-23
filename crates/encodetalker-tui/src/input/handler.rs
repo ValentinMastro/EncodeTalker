@@ -357,8 +357,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Left | KeyCode::Right => {
-                // Si sur field 5 (output path) et batch, ne rien faire
-                if config.selected_field == 5 && key.code == KeyCode::Right {
+                // Si sur field 6 (output path) et batch, ne rien faire
+                if config.selected_field == 6 && key.code == KeyCode::Right {
                     if !config.is_batch() {
                         config.start_editing_output();
                     }
@@ -370,8 +370,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
 
             // Validation avec logique batch
             KeyCode::Enter => {
-                // Si sur field 5 et pas batch, activer l'édition
-                if config.selected_field == 5 && !config.is_batch() {
+                // Si sur field 6 et pas batch, activer l'édition
+                if config.selected_field == 6 && !config.is_batch() {
                     config.start_editing_output();
                     return InputAction::None;
                 }
@@ -504,6 +504,10 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             }
         }
         5 => {
+            // VMAF toggle
+            config.config.enable_vmaf = !config.config.enable_vmaf;
+        }
+        6 => {
             // Output path: géré par le mode édition, ne rien faire ici
         }
         _ => {

@@ -101,6 +101,17 @@ impl EncodingPipeline {
         let _ = tokio::fs::remove_file(&video_temp).await;
         let _ = tokio::fs::remove_file(&audio_temp).await;
 
+        // 7. Calculer VMAF si activé
+        if job.config.enable_vmaf {
+            if let Err(e) = self
+                .calculate_vmaf(job, &video_info, stats_tx, &mut cancel_rx)
+                .await
+            {
+                // Ne pas faire échouer le job si le calcul VMAF échoue
+                tracing::warn!("Calcul VMAF échoué (l'encodage a réussi): {e}");
+            }
+        }
+
         info!(
             "Encodage terminé avec succès: {}",
             job.output_path.display()
@@ -558,6 +569,187 @@ impl EncodingPipeline {
         }
 
         info!("Muxage réussi");
+        Ok(())
+    }
+
+    /// Calculer le score VMAF en comparant la source et le fichier encodé frame par frame
+    #[allow(clippy::too_many_lines)]
+    async fn calculate_vmaf(
+        &self,
+        job: &EncodingJob,
+        video_info: &VideoInfo,
+        stats_tx: mpsc::UnboundedSender<EncodingStats>,
+        cancel_rx: &mut mpsc::UnboundedReceiver<()>,
+    ) -> Result<()> {
+        info!(
+            "Calcul VMAF: {} vs {}",
+            job.input_path.display(),
+            job.output_path.display()
+        );
+
+        // Signaler au TUI que le calcul VMAF commence
+        let mut vmaf_stats = EncodingStats {
+            is_calculating_vmaf: true,
+            total_frames: video_info.total_frames,
+            total_duration: video_info.duration,
+            ..EncodingStats::default()
+        };
+        let _ = stats_tx.send(vmaf_stats.clone());
+
+        // Préparer le fichier JSON temporaire pour le log VMAF
+        let temp_dir = job.output_path.parent().unwrap();
+        let vmaf_log = temp_dir.join(format!("{}_vmaf.json", uuid::Uuid::new_v4()));
+
+        // Déterminer le nombre de threads
+        #[allow(clippy::cast_possible_truncation)]
+        let threads = job.config.encoder_params.threads.unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(1)
+        });
+
+        // Construire le filtre lavfi pour VMAF
+        let vmaf_filter = format!(
+            "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
+            vmaf_log.display()
+        );
+
+        // Lancer ffmpeg pour le calcul VMAF
+        let mut ffmpeg_cmd = std::process::Command::new(&self.ffmpeg_bin);
+        ffmpeg_cmd
+            .arg("-i")
+            .arg(&job.input_path) // Input 0: source (référence)
+            .arg("-i")
+            .arg(&job.output_path) // Input 1: encodé (distorted)
+            .arg("-lavfi")
+            .arg(&vmaf_filter)
+            .arg("-f")
+            .arg("null")
+            .arg("-")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped());
+
+        let mut ffmpeg_child = ffmpeg_cmd
+            .spawn()
+            .context("Échec du démarrage de ffmpeg pour VMAF")?;
+
+        let ffmpeg_stderr = ffmpeg_child
+            .stderr
+            .take()
+            .context("Impossible de prendre stderr de ffmpeg VMAF")?;
+
+        // Parser stderr de ffmpeg pour la progression dans un thread OS
+        let total_frames = video_info.total_frames;
+        let stats_tx_clone = stats_tx.clone();
+
+        let stderr_handle = std::thread::spawn(move || {
+            let reader = BufReader::new(ffmpeg_stderr);
+
+            for line in reader.lines().map_while(Result::ok) {
+                // ffmpeg écrit la progression sous forme: "frame=  123 fps= 45.2 ..."
+                if let Some(frame_str) = line
+                    .strip_prefix("frame=")
+                    .or_else(|| line.find("frame=").map(|pos| &line[pos + 6..]))
+                {
+                    if let Some(frame_num) = frame_str
+                        .split_whitespace()
+                        .next()
+                        .and_then(|s| s.parse::<u64>().ok())
+                    {
+                        let mut stats = EncodingStats {
+                            frame: frame_num,
+                            total_frames,
+                            is_calculating_vmaf: true,
+                            ..EncodingStats::default()
+                        };
+                        stats.calculate_progress();
+                        if stats_tx_clone.send(stats).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            tracing::debug!("Lecture stderr ffmpeg VMAF terminée");
+        });
+
+        // Attendre avec possibilité d'annulation
+        let ffmpeg_child_arc = std::sync::Arc::new(std::sync::Mutex::new(ffmpeg_child));
+        let ffmpeg_child_clone = ffmpeg_child_arc.clone();
+
+        tokio::select! {
+            _ = cancel_rx.recv() => {
+                info!("Annulation VMAF demandée");
+                if let Ok(mut child) = ffmpeg_child_arc.lock() {
+                    let _ = child.kill();
+                }
+                anyhow::bail!("Calcul VMAF annulé");
+            }
+            result = tokio::task::spawn_blocking(move || {
+                let status = ffmpeg_child_clone
+                    .lock()
+                    .unwrap()
+                    .wait()
+                    .context("Échec d'attente de ffmpeg VMAF")?;
+
+                if !status.success() {
+                    anyhow::bail!("ffmpeg VMAF a échoué avec le code {:?}", status.code());
+                }
+                Ok::<(), anyhow::Error>(())
+            }) => {
+                result??;
+            }
+        }
+
+        // Joindre le thread stderr
+        if let Err(e) = stderr_handle.join() {
+            tracing::error!("Échec de jointure du thread stderr VMAF: {:?}", e);
+        }
+
+        // Parser le fichier JSON VMAF pour extraire les scores
+        let vmaf_json = tokio::fs::read_to_string(&vmaf_log)
+            .await
+            .context("Échec de lecture du fichier JSON VMAF")?;
+
+        let vmaf_data: serde_json::Value =
+            serde_json::from_str(&vmaf_json).context("Échec du parsing JSON VMAF")?;
+
+        // Extraire les scores depuis pooled_metrics.vmaf
+        let vmaf_metrics = vmaf_data.get("pooled_metrics").and_then(|p| p.get("vmaf"));
+
+        let vmaf_mean = vmaf_metrics
+            .and_then(|v| v.get("mean"))
+            .and_then(serde_json::Value::as_f64);
+        let vmaf_min = vmaf_metrics
+            .and_then(|v| v.get("min"))
+            .and_then(serde_json::Value::as_f64);
+        let vmaf_max = vmaf_metrics
+            .and_then(|v| v.get("max"))
+            .and_then(serde_json::Value::as_f64);
+
+        if let Some(mean) = vmaf_mean {
+            info!(
+                "VMAF score: {mean:.2} (min: {:.2}, max: {:.2})",
+                vmaf_min.unwrap_or(0.0),
+                vmaf_max.unwrap_or(0.0)
+            );
+        } else {
+            tracing::warn!("Impossible d'extraire le score VMAF du JSON");
+        }
+
+        // Envoyer les résultats finaux
+        vmaf_stats.is_calculating_vmaf = false;
+        vmaf_stats.vmaf_score = vmaf_mean;
+        vmaf_stats.vmaf_min = vmaf_min;
+        vmaf_stats.vmaf_max = vmaf_max;
+        vmaf_stats.progress_percent = 100.0;
+        let _ = stats_tx.send(vmaf_stats);
+
+        // Nettoyer le fichier JSON temporaire
+        let _ = tokio::fs::remove_file(&vmaf_log).await;
+
+        info!("Calcul VMAF terminé");
         Ok(())
     }
 }

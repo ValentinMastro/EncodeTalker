@@ -448,8 +448,8 @@ impl EncodeConfigDialog {
     }
 
     pub fn move_field_down(&mut self) {
-        // 6 champs : encodeur, audio mode, CRF, preset, threads, output path
-        if self.selected_field < 5 {
+        // 7 champs : encodeur, audio mode, CRF, preset, threads, VMAF, output path
+        if self.selected_field < 6 {
             self.selected_field += 1;
         }
     }

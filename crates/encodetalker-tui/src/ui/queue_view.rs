@@ -1,5 +1,8 @@
 use crate::app::AppState;
-use ratatui::{prelude::*, widgets::{Block, Borders, Paragraph, ListItem, List, ListState}};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+};
 
 /// Rendre la vue de la queue
 pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -43,13 +46,16 @@ pub fn render_queue_view(frame: &mut Frame, area: Rect, state: &AppState) {
                 }
             };
 
+            let vmaf = if job.config.enable_vmaf { "oui" } else { "non" };
+
             let text = format!(
-                "{}\n  Encoder: {} | Audio: {} | CRF: {} | Preset: {}",
+                "{}\n  Encoder: {} | Audio: {} | CRF: {} | Preset: {} | VMAF: {}",
                 filename,
                 encoder,
                 audio,
                 job.config.encoder_params.crf,
-                job.config.encoder_params.preset
+                job.config.encoder_params.preset,
+                vmaf
             );
 
             ListItem::new(text).style(Style::default().fg(Color::White))

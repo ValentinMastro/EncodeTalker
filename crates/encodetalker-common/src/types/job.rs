@@ -17,6 +17,8 @@ pub struct EncodingConfig {
     pub subtitle_streams: Option<Vec<usize>>,
     /// Paramètres spécifiques à l'encodeur
     pub encoder_params: EncoderParams,
+    /// Activer le calcul VMAF après encodage (comparaison frame par frame)
+    pub enable_vmaf: bool,
 }
 
 impl Default for EncodingConfig {
@@ -27,6 +29,7 @@ impl Default for EncodingConfig {
             audio_streams: None,
             subtitle_streams: None,
             encoder_params: EncoderParams::default(),
+            enable_vmaf: true,
         }
     }
 }
