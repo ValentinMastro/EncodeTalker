@@ -67,11 +67,6 @@ fn render_active_job(
 
     if let Some(stats) = &job.stats {
         let progress = stats.progress_percent;
-        let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::NONE))
-            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-            .percent(progress as u16)
-            .label(format!("{:.1}%", progress));
 
         let eta_text = if let Some(eta) = stats.eta {
             let secs = eta.as_secs();
@@ -103,7 +98,48 @@ fn render_active_job(
         let info = Paragraph::new(info_text).style(Style::default().fg(Color::White));
         frame.render_widget(info, info_chunks[1]);
 
-        frame.render_widget(gauge, info_chunks[2]);
+        if stats.total_passes > 1 {
+            // Double barre de progression (aomenc 2 passes)
+            let pass1_progress = if stats.current_pass == 1 {
+                stats.progress_percent
+            } else {
+                100.0
+            };
+            let pass2_progress = if stats.current_pass == 2 {
+                stats.progress_percent
+            } else {
+                0.0
+            };
+
+            let gauge1 = Gauge::default()
+                .block(Block::default().borders(Borders::NONE))
+                .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
+                .percent(pass1_progress.min(100.0) as u16)
+                .label(format!("Passe 1: {:.1}%", pass1_progress));
+
+            let gauge2 = Gauge::default()
+                .block(Block::default().borders(Borders::NONE))
+                .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+                .percent(pass2_progress.min(100.0) as u16)
+                .label(format!("Passe 2: {:.1}%", pass2_progress));
+
+            let gauge_chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(1), Constraint::Length(1)])
+                .split(info_chunks[2]);
+
+            frame.render_widget(gauge1, gauge_chunks[0]);
+            frame.render_widget(gauge2, gauge_chunks[1]);
+        } else {
+            // Barre unique (SVT-AV1)
+            let gauge = Gauge::default()
+                .block(Block::default().borders(Borders::NONE))
+                .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+                .percent(progress.min(100.0) as u16)
+                .label(format!("{:.1}%", progress));
+
+            frame.render_widget(gauge, info_chunks[2]);
+        }
     } else {
         let text = Paragraph::new("Démarrage...")
             .block(block)
