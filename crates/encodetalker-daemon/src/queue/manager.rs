@@ -349,7 +349,7 @@ impl QueueManager {
             let stats_job_id = job_id;
             let stats_event_tx = event_tx.clone();
             let stats_active = active.clone();
-            tokio::spawn(async move {
+            let stats_handle = tokio::spawn(async move {
                 while let Some(stats) = stats_rx.recv().await {
                     // Mettre à jour les stats dans le job actif
                     if let Some(job) = stats_active.write().await.get_mut(&stats_job_id) {
@@ -361,6 +361,9 @@ impl QueueManager {
 
             // Lancer le pipeline
             let result = pipeline.encode_job(&job, stats_tx, cancel_rx).await;
+
+            // Attendre que le receiver ait traité tous les messages (dont les stats VMAF)
+            let _ = stats_handle.await;
 
             // Nettoyer le contrôle
             active_controls.lock().await.remove(&job_id);
