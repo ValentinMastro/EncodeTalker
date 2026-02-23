@@ -11,6 +11,7 @@ pub struct VideoInfo {
     pub width: u32,
     pub height: u32,
     pub fps: f64,
+    pub is_interlaced: bool,
     pub audio_streams: Vec<AudioStreamInfo>,
     pub subtitle_streams: Vec<SubtitleStreamInfo>,
 }
@@ -52,6 +53,7 @@ struct FFProbeStream {
     height: Option<u32>,
     r_frame_rate: Option<String>,
     nb_frames: Option<String>,
+    field_order: Option<String>,
     tags: Option<FFProbeTags>,
 }
 
@@ -168,6 +170,20 @@ pub async fn probe_video(
     let width = video_stream.width.context("Largeur manquante")?;
     let height = video_stream.height.context("Hauteur manquante")?;
 
+    // Détecter l'entrelacement via field_order
+    let is_interlaced = video_stream
+        .field_order
+        .as_ref()
+        .map(|fo| matches!(fo.as_str(), "tt" | "bb" | "tb" | "bt"))
+        .unwrap_or(false);
+
+    if is_interlaced {
+        tracing::info!(
+            "Vidéo entrelacée détectée (field_order: {:?}), yadif sera appliqué",
+            video_stream.field_order
+        );
+    }
+
     // Parser FPS (format: "24000/1001" ou "24")
     let fps = video_stream
         .r_frame_rate
@@ -267,6 +283,7 @@ pub async fn probe_video(
         width,
         height,
         fps,
+        is_interlaced,
         audio_streams,
         subtitle_streams,
     })

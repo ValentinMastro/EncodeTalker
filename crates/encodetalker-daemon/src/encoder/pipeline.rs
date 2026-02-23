@@ -111,12 +111,21 @@ impl EncodingPipeline {
         info!("Encodage vidéo avec {:?}", job.config.encoder);
 
         // 1. Spawner ffmpeg avec std::process (stdout piped)
-        let mut ffmpeg_child = std::process::Command::new(&self.ffmpeg_bin)
+        let mut ffmpeg_cmd = std::process::Command::new(&self.ffmpeg_bin);
+        ffmpeg_cmd
             .arg("-nostats")
             .arg("-loglevel")
             .arg("error")
             .arg("-i")
-            .arg(&job.input_path)
+            .arg(&job.input_path);
+
+        // Appliquer yadif si la vidéo est entrelacée
+        if video_info.is_interlaced {
+            info!("Application du filtre yadif (désentrelacement)");
+            ffmpeg_cmd.arg("-vf").arg("yadif");
+        }
+
+        ffmpeg_cmd
             .arg("-f")
             .arg("yuv4mpegpipe")
             .arg("-pix_fmt")
@@ -126,9 +135,9 @@ impl EncodingPipeline {
             .arg("-")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Échec du démarrage de ffmpeg")?;
+            .stderr(Stdio::piped());
+
+        let mut ffmpeg_child = ffmpeg_cmd.spawn().context("Échec du démarrage de ffmpeg")?;
 
         // 2. Prendre stdout et stderr de ffmpeg
         let ffmpeg_stdout = ffmpeg_child
