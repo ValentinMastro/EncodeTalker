@@ -33,6 +33,7 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 walkdir = { workspace = true }
+dirs = { workspace = true }
 futures = "0.3"
 
 [target.'cfg(unix)'.dependencies]

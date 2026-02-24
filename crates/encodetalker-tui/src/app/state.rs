@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 /// Données VMAF par frame parsées pour l'affichage du graphe
 #[derive(Debug, Clone)]
 pub struct VmafGraphData {
-    /// Scores VMAF par frame : (numéro_frame, score_vmaf)
+    /// Scores VMAF par frame : (`numéro_frame`, `score_vmaf`)
     pub frames: Vec<(f64, f64)>,
     /// Score moyen
     pub mean: f64,
@@ -38,6 +38,7 @@ impl VmafGraphData {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|frame| {
+                        #[allow(clippy::cast_precision_loss)]
                         let num = frame.get("frameNum")?.as_u64()? as f64;
                         let vmaf = frame.get("metrics")?.get("vmaf")?.as_f64()?;
                         Some((num, vmaf))
@@ -49,19 +50,19 @@ impl VmafGraphData {
         let pooled = data.get("pooled_metrics").and_then(|p| p.get("vmaf"));
         let mean = pooled
             .and_then(|v| v.get("mean"))
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let min = pooled
             .and_then(|v| v.get("min"))
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let max = pooled
             .and_then(|v| v.get("max"))
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let harmonic_mean = pooled
             .and_then(|v| v.get("harmonic_mean"))
-            .and_then(|v| v.as_f64());
+            .and_then(serde_json::Value::as_f64);
 
         let total_frames = frames.len();
 
@@ -478,6 +479,58 @@ pub struct EncodeConfigDialog {
     pub is_editing_output: bool,
     pub config: EncodingConfig,
     pub selected_field: usize,
+    /// Résultat de la détection d'interlacing (None = pas encore détecté)
+    pub is_interlaced: Option<bool>,
+}
+
+/// Détection synchrone de l'interlacing
+fn detect_interlacing_sync(video_path: &Path) -> bool {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct Stream {
+        field_order: Option<String>,
+        codec_type: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct Probe {
+        streams: Vec<Stream>,
+    }
+
+    // Chemin assumé de ffprobe (même logique que daemon)
+    let ffprobe_bin = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("encodetalker/deps/bin/ffprobe");
+
+    // Si ffprobe n'existe pas, on assume non-interlacé
+    if !ffprobe_bin.exists() {
+        return false;
+    }
+
+    let output = std::process::Command::new(&ffprobe_bin)
+        .arg("-v")
+        .arg("quiet")
+        .arg("-print_format")
+        .arg("json")
+        .arg("-show_streams")
+        .arg("-select_streams")
+        .arg("v:0")
+        .arg(video_path)
+        .output();
+
+    let Ok(output) = output else { return false };
+
+    let Ok(probe): Result<Probe, _> = serde_json::from_slice(&output.stdout) else {
+        return false;
+    };
+
+    probe
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("video"))
+        .and_then(|s| s.field_order.as_ref())
+        .is_some_and(|fo| matches!(fo.as_str(), "tt" | "bb" | "tb" | "bt"))
 }
 
 impl EncodeConfigDialog {
@@ -500,6 +553,13 @@ impl EncodeConfigDialog {
 
         let output_path_string = output_path.display().to_string();
 
+        // Détection synchrone de l'interlacing sur le premier fichier
+        let is_interlaced = if input_paths.is_empty() {
+            None
+        } else {
+            Some(detect_interlacing_sync(&input_paths[0]))
+        };
+
         Self {
             input_paths,
             output_path,
@@ -508,6 +568,7 @@ impl EncodeConfigDialog {
             is_editing_output: false,
             config: EncodingConfig::default(),
             selected_field: 0,
+            is_interlaced,
         }
     }
 
@@ -524,8 +585,8 @@ impl EncodeConfigDialog {
     }
 
     pub fn move_field_down(&mut self) {
-        // 7 champs : encodeur, audio mode, CRF, preset, threads, VMAF, output path
-        if self.selected_field < 6 {
+        // 8 champs : encodeur, audio mode, CRF, preset, threads, VMAF, content type, output path
+        if self.selected_field < 7 {
             self.selected_field += 1;
         }
     }

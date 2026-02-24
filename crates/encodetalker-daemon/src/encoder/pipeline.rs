@@ -381,6 +381,27 @@ impl EncodingPipeline {
             .arg("-b")
             .arg(output);
 
+        // Appliquer les paramètres optimisés selon le type de contenu
+        match job.config.encoder_params.content_type {
+            encodetalker_common::VideoContentType::Anime => {
+                cmd.arg("--tune").arg("0");
+                cmd.arg("--variance-boost-strength").arg("1");
+                cmd.arg("--variance-octile").arg("6");
+                cmd.arg("--enable-qm").arg("1");
+                cmd.arg("--qm-min").arg("0");
+            }
+            encodetalker_common::VideoContentType::LiveAction => {
+                cmd.arg("--tune").arg("0");
+                cmd.arg("--variance-boost-strength").arg("2");
+                cmd.arg("--variance-octile").arg("6");
+                cmd.arg("--enable-qm").arg("1");
+                cmd.arg("--qm-min").arg("0");
+            }
+            encodetalker_common::VideoContentType::Default => {
+                // Aucun paramètre supplémentaire
+            }
+        }
+
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {
             cmd.arg(param);

@@ -69,6 +69,28 @@ impl Default for AudioMode {
     }
 }
 
+/// Type de contenu vidéo (pour optimisations SVT-AV1)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum VideoContentType {
+    /// Paramètres par défaut (comportement actuel)
+    #[default]
+    Default,
+    /// Anime / Animation 2D (tune 0, variance-boost 1)
+    Anime,
+    /// Live Action / Vidéo réelle (tune 0, variance-boost 2)
+    LiveAction,
+}
+
+impl std::fmt::Display for VideoContentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Default => write!(f, "Par défaut"),
+            Self::Anime => write!(f, "Anime"),
+            Self::LiveAction => write!(f, "Live Action"),
+        }
+    }
+}
+
 /// Paramètres spécifiques aux encodeurs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderParams {
@@ -80,6 +102,8 @@ pub struct EncoderParams {
     pub threads: Option<u32>,
     /// Paramètres additionnels en ligne de commande
     pub extra_params: Vec<String>,
+    /// Type de contenu vidéo (anime, live-action, ou par défaut)
+    pub content_type: VideoContentType,
 }
 
 impl Default for EncoderParams {
@@ -89,6 +113,7 @@ impl Default for EncoderParams {
             preset: 6,
             threads: None, // Auto par défaut
             extra_params: vec![],
+            content_type: VideoContentType::default(),
         }
     }
 }

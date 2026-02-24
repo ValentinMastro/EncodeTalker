@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use encodetalker_common::{
     AudioMode, EncoderParams, EncoderType, EncodingConfig, EncodingJob, EncodingStats, JobStatus,
+    VideoContentType,
 };
 use encodetalker_daemon::encoder::EncodingPipeline;
 use std::path::PathBuf;
@@ -61,6 +62,7 @@ async fn test_encode_test1_mkv_with_svt_av1() -> Result<()> {
                 preset: 13,    // Preset le plus rapide pour SVT-AV1
                 threads: None, // Auto
                 extra_params: vec![],
+                content_type: VideoContentType::default(),
             },
             audio_mode: AudioMode::Opus { bitrate: 128 },
             audio_streams: None,

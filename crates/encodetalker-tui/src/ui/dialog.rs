@@ -23,8 +23,8 @@ fn render_encode_config_dialog(
     area: Rect,
     config: &crate::app::EncodeConfigDialog,
 ) {
-    // Centrer le dialogue
-    let dialog_area = centered_rect(70, 60, area);
+    // Centrer le dialogue (plus large et plus haut pour la preview)
+    let dialog_area = centered_rect(80, 80, area);
 
     // Fond semi-transparent
     let clear = Clear;
@@ -61,6 +61,8 @@ fn render_encode_config_dialog(
             Constraint::Length(3), // Preset
             Constraint::Length(3), // Threads
             Constraint::Length(3), // VMAF
+            Constraint::Length(3), // Content Type
+            Constraint::Min(5),    // Command Preview (extensible)
             Constraint::Length(2), // Instructions
         ])
         .split(inner);
@@ -75,7 +77,7 @@ fn render_encode_config_dialog(
     frame.render_widget(input, chunks[0]);
 
     // Output file (éditable) - Style grisé si batch
-    let output_style = if config.selected_field == 6 && !config.is_batch() {
+    let output_style = if config.selected_field == 7 && !config.is_batch() {
         if config.is_editing_output {
             Style::default()
                 .fg(Color::Green)
@@ -100,7 +102,7 @@ fn render_encode_config_dialog(
         let before: String = chars[..config.output_path_cursor].iter().collect();
         let after: String = chars[config.output_path_cursor..].iter().collect();
         format!("Output: {before}█{after}")
-    } else if config.selected_field == 6 {
+    } else if config.selected_field == 7 {
         format!("Output: {} [→ to edit]", config.output_path_string)
     } else {
         format!("Output: {}", config.output_path_string)
@@ -212,6 +214,49 @@ fn render_encode_config_dialog(
     let vmaf = Paragraph::new(vmaf_text).style(vmaf_style);
     frame.render_widget(vmaf, chunks[7]);
 
+    // Content Type
+    let content_type_text = format!("Type:    {}", config.config.encoder_params.content_type);
+    let content_type_style = if config.selected_field == 6 {
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let content_type = Paragraph::new(content_type_text).style(content_type_style);
+    frame.render_widget(content_type, chunks[8]);
+
+    // Command Preview
+    let preview_text = if config.is_batch() {
+        format!(
+            "Batch: {} fichiers avec config identique\nEncoder: {} | CRF: {} | Preset: {} | Type: {}",
+            config.input_paths.len(),
+            config.config.encoder,
+            config.config.encoder_params.crf,
+            config.config.encoder_params.preset,
+            config.config.encoder_params.content_type,
+        )
+    } else {
+        let preview_lines = encodetalker_common::build_full_pipeline_preview(
+            &config.input_paths[0],
+            &config.output_path,
+            &config.config,
+            config.is_interlaced,
+        );
+        preview_lines.join("\n")
+    };
+
+    let preview = Paragraph::new(preview_text)
+        .style(Style::default().fg(Color::Cyan))
+        .wrap(Wrap { trim: false })
+        .block(
+            Block::default()
+                .borders(Borders::TOP)
+                .title(" Preview Commande ")
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+    frame.render_widget(preview, chunks[9]);
+
     // Instructions - Adaptées au batch
     let instructions_text = if config.is_editing_output {
         "←→: Déplacer curseur | Caractère: Insérer | Backspace/Suppr: Effacer | Entrée: Valider | ESC: Annuler"
@@ -223,7 +268,7 @@ fn render_encode_config_dialog(
     let instructions = Paragraph::new(instructions_text)
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(instructions, chunks[8]);
+    frame.render_widget(instructions, chunks[10]);
 }
 
 /// Rendre le dialogue de confirmation

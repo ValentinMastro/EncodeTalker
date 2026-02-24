@@ -8,6 +8,11 @@ use ratatui::{
 };
 
 /// Downsampler les données de frames pour correspondre à la largeur effective du terminal
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 fn downsample(frames: &[(f64, f64)], target_points: usize) -> Vec<(f64, f64)> {
     if frames.len() <= target_points || target_points == 0 {
         return frames.to_vec();
@@ -30,6 +35,7 @@ fn downsample(frames: &[(f64, f64)], target_points: usize) -> Vec<(f64, f64)> {
 }
 
 /// Rendre le graphe VMAF en overlay plein écran
+#[allow(clippy::too_many_lines)]
 pub fn render_vmaf_graph(frame: &mut Frame, area: Rect, data: &VmafGraphData) {
     let dialog_area = fullscreen_rect(area);
 
@@ -73,7 +79,7 @@ pub fn render_vmaf_graph(frame: &mut Frame, area: Rect, data: &VmafGraphData) {
     // Downsampler les données
     let downsampled = downsample(&data.frames, effective_width);
 
-    let x_max = data.frames.last().map(|(x, _)| *x).unwrap_or(1.0).max(1.0);
+    let x_max = data.frames.last().map_or(1.0, |(x, _)| *x).max(1.0);
 
     // Trouver la frame avec le score VMAF minimum
     let min_frame = data
@@ -110,6 +116,7 @@ pub fn render_vmaf_graph(frame: &mut Frame, area: Rect, data: &VmafGraphData) {
     }
 
     let y_base = data.min.floor().min(80.0);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let min_label = format!("▲ {:.2} (f.{})", min_frame.1, min_frame.0 as u64);
     let min_label_color = if min_frame.1 < 80.0 {
         Color::Red

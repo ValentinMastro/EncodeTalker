@@ -1,6 +1,6 @@
 use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View, VmafGraphData};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use encodetalker_common::{AudioMode, EncoderType};
+use encodetalker_common::{AudioMode, EncoderType, VideoContentType};
 
 /// Obtenir le nombre max de threads disponibles sur la machine
 ///
@@ -402,8 +402,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
                 return InputAction::None;
             }
             KeyCode::Left | KeyCode::Right => {
-                // Si sur field 6 (output path) et batch, ne rien faire
-                if config.selected_field == 6 && key.code == KeyCode::Right {
+                // Si sur field 7 (output path) et batch, ne rien faire
+                if config.selected_field == 7 && key.code == KeyCode::Right {
                     if !config.is_batch() {
                         config.start_editing_output();
                     }
@@ -415,8 +415,8 @@ fn handle_encode_config_dialog_key(state: &mut AppState, key: KeyEvent) -> Input
 
             // Validation avec logique batch
             KeyCode::Enter => {
-                // Si sur field 6 et pas batch, activer l'édition
-                if config.selected_field == 6 && !config.is_batch() {
+                // Si sur field 7 et pas batch, activer l'édition
+                if config.selected_field == 7 && !config.is_batch() {
                     config.start_editing_output();
                     return InputAction::None;
                 }
@@ -550,6 +550,33 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             config.config.enable_vmaf = !config.config.enable_vmaf;
         }
         6 => {
+            // Content Type: cycle Default → Anime → LiveAction → Default
+            config.config.encoder_params.content_type =
+                match config.config.encoder_params.content_type {
+                    VideoContentType::Default => {
+                        if increment {
+                            VideoContentType::Anime
+                        } else {
+                            VideoContentType::LiveAction
+                        }
+                    }
+                    VideoContentType::Anime => {
+                        if increment {
+                            VideoContentType::LiveAction
+                        } else {
+                            VideoContentType::Default
+                        }
+                    }
+                    VideoContentType::LiveAction => {
+                        if increment {
+                            VideoContentType::Default
+                        } else {
+                            VideoContentType::Anime
+                        }
+                    }
+                };
+        }
+        7 => {
             // Output path: géré par le mode édition, ne rien faire ici
         }
         _ => {
