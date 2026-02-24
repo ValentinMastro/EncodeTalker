@@ -92,7 +92,7 @@ fn check_dependencies_installed() -> anyhow::Result<()> {
 }
 
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // Setup complet : logging, config, deps, queue, IPC
 async fn main() -> anyhow::Result<()> {
     // Initialiser le logging
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));

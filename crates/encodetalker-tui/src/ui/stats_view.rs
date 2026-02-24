@@ -6,6 +6,15 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph},
 };
 
+/// Convertir un pourcentage (0.0-100.0) en u16 pour les gauges, en clampant à [0, 100]
+///
+/// Safe: clamp garantit [0, 100], pas de troncation ni de valeur négative
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[inline]
+fn percent_to_u16(percent: f64) -> u16 {
+    percent.clamp(0.0, 100.0) as u16
+}
+
 /// Rendre la vue des jobs actifs
 pub fn render_active_view(frame: &mut Frame, area: Rect, state: &AppState) {
     let block = Block::default()
@@ -112,11 +121,10 @@ fn render_vmaf_progress(
     let info = Paragraph::new(vmaf_info).style(Style::default().fg(Color::Cyan));
     frame.render_widget(info, info_chunks[1]);
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let gauge = Gauge::default()
         .block(Block::default().borders(Borders::NONE))
         .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
-        .percent(stats.progress_percent.min(100.0) as u16)
+        .percent(percent_to_u16(stats.progress_percent))
         .label(format!("VMAF: {:.1}%", stats.progress_percent));
 
     frame.render_widget(gauge, info_chunks[2]);
@@ -170,18 +178,16 @@ fn render_encoding_progress(
             0.0
         };
 
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let gauge1 = Gauge::default()
             .block(Block::default().borders(Borders::NONE))
             .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
-            .percent(pass1_progress.min(100.0) as u16)
+            .percent(percent_to_u16(pass1_progress))
             .label(format!("Passe 1: {pass1_progress:.1}%"));
 
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let gauge2 = Gauge::default()
             .block(Block::default().borders(Borders::NONE))
             .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-            .percent(pass2_progress.min(100.0) as u16)
+            .percent(percent_to_u16(pass2_progress))
             .label(format!("Passe 2: {pass2_progress:.1}%"));
 
         let gauge_chunks = Layout::default()
@@ -193,11 +199,10 @@ fn render_encoding_progress(
         frame.render_widget(gauge2, gauge_chunks[1]);
     } else {
         // Barre unique (SVT-AV1)
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let gauge = Gauge::default()
             .block(Block::default().borders(Borders::NONE))
             .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-            .percent(progress.min(100.0) as u16)
+            .percent(percent_to_u16(progress))
             .label(format!("{progress:.1}%"));
 
         frame.render_widget(gauge, info_chunks[2]);

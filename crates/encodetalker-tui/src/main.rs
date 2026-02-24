@@ -17,7 +17,7 @@ use encodetalker_tui::{
 };
 
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // Setup complet : logging, daemon, terminal, event loop
 async fn main() -> Result<()> {
     // Initialiser le logging
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));

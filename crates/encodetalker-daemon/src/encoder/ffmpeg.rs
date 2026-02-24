@@ -3,6 +3,16 @@ use serde::Deserialize;
 use std::path::Path;
 use std::time::Duration;
 
+/// Estimer le nombre de frames à partir de la durée et du fps
+///
+/// Safe: durée et fps sont toujours positifs dans ce contexte, `ceil()` produit un `f64` >= 0
+/// La troncation est négligeable pour des vidéos réalistes (< 2^53 frames)
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[inline]
+fn estimate_frame_count(duration_secs: f64, fps: f64) -> u64 {
+    (duration_secs * fps).ceil() as u64
+}
+
 /// Informations sur le fichier vidéo source
 #[derive(Debug, Clone)]
 pub struct VideoInfo {
@@ -131,7 +141,7 @@ async fn count_frames_precisely(ffmpeg_bin: &Path, input: &Path) -> Result<u64> 
 /// # Panics
 ///
 /// Peut paniquer si le chemin d'entrée contient des caractères invalides (conversion `to_str().unwrap()`).
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // Probe complet : ffprobe, parsing JSON, comptage frames optionnel
 pub async fn probe_video(
     ffprobe_bin: &Path,
     ffmpeg_bin: &Path,
@@ -225,8 +235,7 @@ pub async fn probe_video(
                         // Fallback sur estimation si le comptage échoue
                         if let Some(duration) = duration {
                             let duration_secs = duration.as_secs_f64();
-                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                            let estimated = (duration_secs * fps).ceil() as u64;
+                            let estimated = estimate_frame_count(duration_secs, fps);
                             tracing::info!(
                                 "Estimation fallback: {} frames (durée={:.2}s × fps={:.2})",
                                 estimated,
@@ -243,8 +252,7 @@ pub async fn probe_video(
                 // Niveau 3: Estimation rapide (durée × fps)
                 if let Some(duration) = duration {
                     let duration_secs = duration.as_secs_f64();
-                    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                    let estimated = (duration_secs * fps).ceil() as u64;
+                    let estimated = estimate_frame_count(duration_secs, fps);
                     tracing::info!(
                         "nb_frames absent, estimation: {} frames (durée={:.2}s × fps={:.2})",
                         estimated,
@@ -327,28 +335,27 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn test_frame_estimation() {
         // 2 minutes à 24 fps
         let duration = Duration::from_secs(120);
         let fps = 24.0;
-        let estimated = (duration.as_secs_f64() * fps).ceil() as u64;
+        let estimated = estimate_frame_count(duration.as_secs_f64(), fps);
         assert_eq!(estimated, 2880);
 
         // NTSC (23.976 fps)
         let fps_ntsc = 23.976;
-        let estimated_ntsc = (duration.as_secs_f64() * fps_ntsc).ceil() as u64;
+        let estimated_ntsc = estimate_frame_count(duration.as_secs_f64(), fps_ntsc);
         assert_eq!(estimated_ntsc, 2878);
 
         // FPS fractionnaire (29.97)
         let fps_frac = 30000.0 / 1001.0;
-        let estimated_frac = (duration.as_secs_f64() * fps_frac).ceil() as u64;
+        let estimated_frac = estimate_frame_count(duration.as_secs_f64(), fps_frac);
         assert_eq!(estimated_frac, 3597);
 
         // Durée avec décimales (120.5s à 25 fps)
         let duration_decimal = Duration::from_secs_f64(120.5);
         let fps_25 = 25.0;
-        let estimated_decimal = (duration_decimal.as_secs_f64() * fps_25).ceil() as u64;
+        let estimated_decimal = estimate_frame_count(duration_decimal.as_secs_f64(), fps_25);
         assert_eq!(estimated_decimal, 3013);
     }
 }

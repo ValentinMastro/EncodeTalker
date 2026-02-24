@@ -16,7 +16,7 @@ pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
 }
 
 /// Rendre le dialogue de configuration d'encodage
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // UI avec 7 champs configurables, difficile à décomposer
 fn render_encode_config_dialog(
     frame: &mut Frame,
     area: Rect,

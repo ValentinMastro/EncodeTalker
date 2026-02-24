@@ -8,6 +8,15 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::info;
 
+/// Obtenir le nombre de threads disponibles, en u32 pour les encodeurs
+///
+/// Safe: nombre de cœurs réaliste (8-256) bien inférieur à `u32::MAX`
+#[allow(clippy::cast_possible_truncation)]
+#[inline]
+fn get_available_threads() -> u32 {
+    std::thread::available_parallelism().map_or(1, |n| n.get().min(u32::MAX as usize) as u32)
+}
+
 /// Pipeline d'encodage complet
 pub struct EncodingPipeline {
     ffmpeg_bin: PathBuf,
@@ -162,7 +171,7 @@ impl EncodingPipeline {
     }
 
     /// Lancer une passe d'encodage (ffmpeg → encodeur via pipe kernel)
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)] // Pipeline complexe : ffmpeg, encodeur, parsing, annulation
     async fn run_encode_pass(
         &self,
         job: &EncodingJob,
@@ -398,12 +407,11 @@ impl EncodingPipeline {
             .arg(format!("--fpf={}", fpf_path.display()));
 
         // Ajouter threads (auto-detect si None)
-        #[allow(clippy::cast_possible_truncation)]
-        let threads = job.config.encoder_params.threads.unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get() as u32)
-                .unwrap_or(1)
-        });
+        let threads = job
+            .config
+            .encoder_params
+            .threads
+            .unwrap_or_else(get_available_threads);
         cmd.arg(format!("--threads={threads}"));
 
         // --ivf seulement pour la passe 2 (passe 1 écrit dans /dev/null)
@@ -573,7 +581,7 @@ impl EncodingPipeline {
     }
 
     /// Calculer le score VMAF en comparant la source et le fichier encodé frame par frame
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines)] // Calcul VMAF complet : ffmpeg, parsing stderr/JSON, annulation
     async fn calculate_vmaf(
         &self,
         job: &EncodingJob,
@@ -607,12 +615,11 @@ impl EncodingPipeline {
         };
 
         // Déterminer le nombre de threads
-        #[allow(clippy::cast_possible_truncation)]
-        let threads = job.config.encoder_params.threads.unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get() as u32)
-                .unwrap_or(1)
-        });
+        let threads = job
+            .config
+            .encoder_params
+            .threads
+            .unwrap_or_else(get_available_threads);
 
         // Construire le filtre lavfi pour VMAF
         let vmaf_filter = format!(

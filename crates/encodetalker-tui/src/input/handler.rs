@@ -2,6 +2,15 @@ use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use encodetalker_common::{AudioMode, EncoderType};
 
+/// Obtenir le nombre max de threads disponibles sur la machine
+///
+/// Safe: nombre de cœurs réaliste (8-256) bien inférieur à `u32::MAX`
+#[allow(clippy::cast_possible_truncation)]
+#[inline]
+fn get_max_threads() -> u32 {
+    std::thread::available_parallelism().map_or(16, |n| n.get().min(u32::MAX as usize) as u32)
+}
+
 /// Gérer un événement clavier
 pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
     // Si on est en Loading, bloquer toutes les touches sauf 'q'
@@ -472,10 +481,7 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
         }
         4 => {
             // Threads
-            #[allow(clippy::cast_possible_truncation)]
-            let max_threads = std::thread::available_parallelism()
-                .map(|n| n.get() as u32)
-                .unwrap_or(16);
+            let max_threads = get_max_threads();
 
             match config.config.encoder_params.threads {
                 None => {
