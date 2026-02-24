@@ -621,9 +621,9 @@ impl EncodingPipeline {
             .threads
             .unwrap_or_else(get_available_threads);
 
-        // Construire le filtre lavfi pour VMAF
+        // Construire le filtre lavfi pour VMAF + PSNR + SSIM
         let vmaf_filter = format!(
-            "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
+            "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json:feature='name=psnr':feature='name=float_ssim'",
             vmaf_log.display()
         );
 

@@ -381,6 +381,7 @@ install_dav1d() {
         --libdir=lib \
         --default-library=static \
         --buildtype=release \
+        -Denable_float=true \
         -Denable_tools=false \
         -Denable_tests=false
 
@@ -430,7 +431,8 @@ install_vmaf() {
         --prefix="$DEPS_DIR" \
         --libdir=lib \
         --default-library=static \
-        --buildtype=release
+        --buildtype=release \
+        -Denable_float=true
 
     echo "  Building libvmaf with $NCPUS cores..."
     ninja -C build -j"$NCPUS"
