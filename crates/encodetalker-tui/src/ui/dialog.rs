@@ -51,7 +51,6 @@ fn render_encode_config_dialog(
     // Layout pour les champs
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1)
         .constraints([
             Constraint::Length(3), // Input file
             Constraint::Length(3), // Output file
@@ -252,7 +251,7 @@ fn render_encode_config_dialog(
         .block(
             Block::default()
                 .borders(Borders::TOP)
-                .title(" Preview Commande ")
+                .title(" Aperçu des commandes ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
     frame.render_widget(preview, chunks[9]);
