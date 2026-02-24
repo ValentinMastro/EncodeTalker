@@ -186,24 +186,13 @@ debug!("Debug détaillé");
 
 **Problème libvmaf + FFmpeg** : libvmaf contient du code C++ (svm.cpp) mais FFmpeg utilise gcc. Il faut ajouter `-lstdc++` dans `--extra-libs` lors du configure de FFmpeg, sinon le test de détection de libvmaf échoue avec des erreurs de symboles C++ non résolus (`undefined reference to std::...`).
 
-**PSNR et SSIM** : Pour activer les features PSNR et SSIM dans libvmaf, il faut compiler avec `-Denable_float=true` lors du meson setup. Sans cette option, seul VMAF et SSIM sont disponibles, le feature extractor PSNR sera silencieusement ignoré.
-
 ```bash
-# ✅ Configuration correcte de libvmaf avec support PSNR/SSIM
-meson setup build \
-    --prefix=$DEPS_DIR \
-    -Denable_float=true
-
 # ✅ Configuration correcte de FFmpeg avec libvmaf
 ./configure \
     --extra-ldflags="-L$DEPS_DIR/lib" \
     --extra-libs="-lstdc++ -lm -lpthread" \
     --enable-libvmaf
 ```
-
-Le JSON VMAF généré contiendra alors :
-- Par frame : `vmaf`, `float_ssim`, `psnr_y`, `psnr_cb`, `psnr_cr`
-- Pooled metrics : mean/min/max pour chaque métrique
 
 ### 2. Pipeline d'encodage
 

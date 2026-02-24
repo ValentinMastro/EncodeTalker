@@ -430,8 +430,7 @@ install_vmaf() {
         --prefix="$DEPS_DIR" \
         --libdir=lib \
         --default-library=static \
-        --buildtype=release \
-        -Denable_float=true
+        --buildtype=release
 
     echo "  Building libvmaf with $NCPUS cores..."
     ninja -C build -j"$NCPUS"
