@@ -48,3 +48,6 @@ state.json
 
 # dépendances à installer
 .dependencies/
+
+# VMAF
+*.json
