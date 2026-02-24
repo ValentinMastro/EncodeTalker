@@ -3,6 +3,80 @@ use encodetalker_common::{EncodingConfig, EncodingJob};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+/// Données VMAF par frame parsées pour l'affichage du graphe
+#[derive(Debug, Clone)]
+pub struct VmafGraphData {
+    /// Scores VMAF par frame : (numéro_frame, score_vmaf)
+    pub frames: Vec<(f64, f64)>,
+    /// Score moyen
+    pub mean: f64,
+    /// Score minimum
+    pub min: f64,
+    /// Score maximum
+    pub max: f64,
+    /// Moyenne harmonique
+    pub harmonic_mean: Option<f64>,
+    /// Nom du fichier source (pour le titre)
+    pub filename: String,
+    /// Nombre total de frames
+    pub total_frames: usize,
+}
+
+impl VmafGraphData {
+    /// Parser un fichier JSON VMAF généré par libvmaf
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le fichier ne peut pas être lu ou si le JSON est invalide.
+    pub fn from_json_file(path: &Path, filename: String) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let data: serde_json::Value = serde_json::from_str(&content)?;
+
+        let frames: Vec<(f64, f64)> = data
+            .get("frames")
+            .and_then(|f| f.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|frame| {
+                        let num = frame.get("frameNum")?.as_u64()? as f64;
+                        let vmaf = frame.get("metrics")?.get("vmaf")?.as_f64()?;
+                        Some((num, vmaf))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let pooled = data.get("pooled_metrics").and_then(|p| p.get("vmaf"));
+        let mean = pooled
+            .and_then(|v| v.get("mean"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let min = pooled
+            .and_then(|v| v.get("min"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let max = pooled
+            .and_then(|v| v.get("max"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let harmonic_mean = pooled
+            .and_then(|v| v.get("harmonic_mean"))
+            .and_then(|v| v.as_f64());
+
+        let total_frames = frames.len();
+
+        Ok(Self {
+            frames,
+            mean,
+            min,
+            max,
+            harmonic_mean,
+            filename,
+            total_frames,
+        })
+    }
+}
+
 /// Vue active de l'application
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -380,6 +454,8 @@ pub enum Dialog {
     },
     /// Dialogue d'erreur
     Error { message: String },
+    /// Graphe VMAF par frame
+    VmafGraph(VmafGraphData),
 }
 
 /// Actions de confirmation

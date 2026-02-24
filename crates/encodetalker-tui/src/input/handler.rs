@@ -1,4 +1,4 @@
-use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View};
+use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View, VmafGraphData};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use encodetalker_common::{AudioMode, EncoderType};
 
@@ -232,6 +232,36 @@ fn handle_history_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             state.move_down();
             InputAction::None
         }
+        KeyCode::Enter => {
+            if let Some(job) = state.history_jobs.get(state.selected_index) {
+                if let Some(vmaf_path) = job.stats.as_ref().and_then(|s| s.vmaf_json_path.as_ref())
+                {
+                    if vmaf_path.exists() {
+                        let filename = job
+                            .input_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        match VmafGraphData::from_json_file(vmaf_path, filename) {
+                            Ok(data) => {
+                                state.dialog = Some(Dialog::VmafGraph(data));
+                            }
+                            Err(e) => {
+                                state.dialog = Some(Dialog::Error {
+                                    message: format!("Erreur de lecture VMAF: {e}"),
+                                });
+                            }
+                        }
+                    } else {
+                        state.dialog = Some(Dialog::Error {
+                            message: "Fichier VMAF introuvable".to_string(),
+                        });
+                    }
+                }
+            }
+            InputAction::None
+        }
         KeyCode::Char('r') => {
             // Retry un job failed
             if let Some(job) = state.history_jobs.get(state.selected_index) {
@@ -274,6 +304,12 @@ fn handle_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
         Some(Dialog::Error { .. }) => {
             // N'importe quelle touche ferme l'erreur
             state.dialog = None;
+            InputAction::None
+        }
+        Some(Dialog::VmafGraph(_)) => {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Enter) {
+                state.dialog = None;
+            }
             InputAction::None
         }
         None => InputAction::None,

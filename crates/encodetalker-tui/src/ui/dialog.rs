@@ -11,6 +11,7 @@ pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
             Dialog::EncodeConfig(config) => render_encode_config_dialog(frame, area, config),
             Dialog::Confirm { message, .. } => render_confirm_dialog(frame, area, message),
             Dialog::Error { message } => render_error_dialog(frame, area, message),
+            Dialog::VmafGraph(data) => crate::ui::vmaf_graph::render_vmaf_graph(frame, area, data),
         }
     }
 }

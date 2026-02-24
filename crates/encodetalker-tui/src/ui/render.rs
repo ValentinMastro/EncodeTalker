@@ -81,7 +81,7 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
             View::Loading => " q: Quitter ", // Ne devrait pas arriver (Loading affiche son propre footer)
             View::FileBrowser => " Tab: Vue suivante | ↑↓: Naviguer | Entrée: Ouvrir | ESPACE: Sélectionner | Ctrl+A: Tout | a: Ajouter | r: Rafraîchir | q: Quitter ",
             View::Queue | View::Active => " Tab: Vue suivante | ↑↓: Naviguer | c: Annuler | r: Rafraîchir | q: Quitter ",
-            View::History => " Tab: Vue suivante | ↑↓: Naviguer | r: Réessayer | c: Effacer | C: Tout effacer | q: Quitter ",
+            View::History => " Tab: Vue suivante | ↑↓: Naviguer | Entrée: Graphe VMAF | r: Réessayer | c: Effacer | C: Tout effacer | q: Quitter ",
         }
     };
 
