@@ -381,7 +381,6 @@ install_dav1d() {
         --libdir=lib \
         --default-library=static \
         --buildtype=release \
-        -Denable_float=true \
         -Denable_tools=false \
         -Denable_tests=false
 
@@ -892,7 +891,7 @@ main() {
     echo "Total time: ${minutes}m ${seconds}s"
     echo ""
     echo "Verify installation with:"
-    echo "  ./CHECK_INSTALLED_DEPENDENCIES.sh"
+    echo "  bash scripts/CHECK_INSTALLED_DEPENDENCIES.sh"
     echo ""
     echo "You can now run:"
     echo "  ./target/release/encodetalker-tui"
