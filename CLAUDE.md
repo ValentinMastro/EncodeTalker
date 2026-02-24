@@ -17,8 +17,10 @@ EncodeTalker/
 ├── crates/
 │   ├── encodetalker-common/     # Types partagés, protocole IPC
 │   ├── encodetalker-daemon/     # Daemon d'encodage (serveur)
-│   ├── encodetalker-tui/        # Interface TUI (client)
-│   └── encodetalker-deps/       # Gestion et compilation des dépendances
+│   └── encodetalker-tui/        # Interface TUI (client)
+├── scripts/
+│   ├── INSTALL_DEPENDENCIES.sh  # Script de compilation des dépendances (FFmpeg, libvmaf, etc.)
+│   └── CHECK_INSTALLED_DEPENDENCIES.sh
 ├── config/
 │   └── config.toml              # Configuration par défaut
 ├── README.md                    # Documentation utilisateur
@@ -97,15 +99,28 @@ RUST_LOG=encodetalker_daemon::encoder=debug ./target/release/encodetalker-daemon
 
 ## 📦 Dépendances
 
+### Gestion des dépendances
+
+**Important** : Les dépendances sont gérées par le script bash `scripts/INSTALL_DEPENDENCIES.sh`, PAS par un crate Rust. Le script télécharge, compile et installe les dépendances localement.
+
 ### Dépendances compilées/téléchargées automatiquement
 
-**Linux** : Le projet compile ces dépendances localement dans `~/.local/share/encodetalker/deps/` :
+**Linux** : Le script compile ces dépendances localement (par défaut dans `.dependencies/` à côté de l'exécutable) :
 
-1. **FFmpeg** (15-20 min) - Demux, muxing, extraction audio
-2. **SVT-AV1-PSY** (10-15 min) - Encodeur AV1 optimisé (par défaut)
-3. **libaom** (15-20 min) - Encodeur AV1 de référence
+1. **libvmaf** (~5 min) - Calcul de qualité vidéo (VMAF, PSNR, SSIM)
+2. **FFmpeg** (15-20 min) - Demux, muxing, extraction audio
+3. **SVT-AV1-PSY** (10-15 min) - Encodeur AV1 optimisé (par défaut)
+4. **libaom** (15-20 min) - Encodeur AV1 de référence
+5. **libopus, libvpx, libdav1d** - Codecs audio/vidéo
 
-**Temps total de compilation : ~40-55 minutes**
+**Temps total de compilation : ~45-60 minutes**
+
+Installation manuelle :
+```bash
+./scripts/INSTALL_DEPENDENCIES.sh           # Tout installer
+./scripts/INSTALL_DEPENDENCIES.sh --vmaf    # Réinstaller libvmaf seulement
+./scripts/INSTALL_DEPENDENCIES.sh --ffmpeg  # Réinstaller FFmpeg seulement
+```
 
 **Windows** : Les binaires pré-compilés sont téléchargés automatiquement dans `%LOCALAPPDATA%\encodetalker\deps\` :
 
