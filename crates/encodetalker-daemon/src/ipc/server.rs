@@ -338,7 +338,7 @@ impl IpcServer {
                             },
                         )
                     }
-                    Err(e) => Response::error(request_id, format!("Erreur probe vidéo: {}", e)),
+                    Err(e) => Response::error(request_id, format!("Erreur probe vidéo: {e}")),
                 }
             }
         }

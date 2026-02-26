@@ -64,10 +64,10 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
 
             // Formatter la taille (uniquement pour vidéos, arrondi au Mo)
             let size_str = if entry.is_video {
-                entry
-                    .size_bytes
-                    .map(|b| format!("{:>9} Mo", b / 1_000_000))
-                    .unwrap_or_else(|| "        - Mo".to_string())
+                entry.size_bytes.map_or_else(
+                    || "        - Mo".to_string(),
+                    |b| format!("{:>9} Mo", b / 1_000_000),
+                )
             } else {
                 "            ".to_string() // vide pour les non-vidéos
             };
@@ -76,8 +76,7 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
             let duration_str = if entry.is_video {
                 entry
                     .duration_secs
-                    .map(|s| format_duration(s))
-                    .unwrap_or_else(|| "          ?".to_string())
+                    .map_or_else(|| "          ?".to_string(), format_duration)
             } else {
                 "           ".to_string() // vide pour les non-vidéos
             };
@@ -92,26 +91,11 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
                 format!("{:<width$}", entry.name, width = available_width as usize)
             };
 
-            // Style pour sélections
-            let style = if state.file_browser.is_selected(&entry.path) {
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else if entry.is_dir {
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD)
-            } else if entry.is_video {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
+            let is_selected = state.file_browser.is_selected(&entry.path);
+            let style = entry_style(entry, is_selected);
 
             // Assembler la ligne
-            let text = format!(
-                "{}{} {} | {} | {}",
-                checkbox, icon, display_name, size_str, duration_str
-            );
+            let text = format!("{checkbox}{icon} {display_name} | {size_str} | {duration_str}");
             ListItem::new(text).style(style)
         })
         .collect();
@@ -129,4 +113,20 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
     list_state.select(Some(state.selected_index));
 
     frame.render_stateful_widget(list, area, &mut list_state);
+}
+
+fn entry_style(entry: &crate::app::state::DirEntry, is_selected: bool) -> Style {
+    if is_selected {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else if entry.is_dir {
+        Style::default()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::BOLD)
+    } else if entry.is_video {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    }
 }

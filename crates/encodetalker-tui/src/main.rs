@@ -365,13 +365,11 @@ async fn main() -> Result<()> {
                 if let Some(path) = pending_probes.first() {
                     match client.probe_video(path.clone()).await {
                         Ok((duration, _size)) => {
-                            app_state
-                                .file_browser
-                                .update_video_info(path.clone(), duration);
+                            app_state.file_browser.update_video_info(path, duration);
                         }
                         Err(e) => {
                             // En cas d'erreur, marquer comme "-" en mettant None
-                            app_state.file_browser.update_video_info(path.clone(), None);
+                            app_state.file_browser.update_video_info(path, None);
                             tracing::debug!("Erreur probe vidéo {}: {}", path.display(), e);
                         }
                     }

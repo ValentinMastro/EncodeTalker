@@ -434,10 +434,10 @@ impl FileBrowserState {
     }
 
     /// Mettre à jour les informations d'une vidéo (appelé quand le daemon répond)
-    pub fn update_video_info(&mut self, path: PathBuf, duration: Option<f64>) {
-        if let Some(entry) = self.entries.iter_mut().find(|e| e.path == path) {
+    pub fn update_video_info(&mut self, path: &Path, duration: Option<f64>) {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.path == *path) {
             entry.duration_secs = duration;
-            self.pending_probes.remove(&path);
+            self.pending_probes.remove(path);
         }
     }
 
@@ -476,6 +476,8 @@ fn is_video_file(path: &Path) -> bool {
 }
 
 /// Formater une durée en secondes au format JJ:HH:MM:SS (toujours complet pour alignement)
+#[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn format_duration(seconds: f64) -> String {
     let total_secs = seconds as u64;
     let days = total_secs / 86400;
@@ -484,7 +486,7 @@ pub fn format_duration(seconds: f64) -> String {
     let secs = total_secs % 60;
 
     // Toujours afficher les 4 composantes pour alignement
-    format!("{:02}:{:02}:{:02}:{:02}", days, hours, minutes, secs)
+    format!("{days:02}:{hours:02}:{minutes:02}:{secs:02}")
 }
 
 /// Types de dialogues

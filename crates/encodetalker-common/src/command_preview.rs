@@ -118,7 +118,7 @@ pub fn build_full_pipeline_preview(
     // Étape 1: Demux + Encode (combinés avec pipe)
     let demux_cmd = build_ffmpeg_demux_preview(input, is_interlaced);
     let encoder_cmd = build_encoder_preview(config, "video.ivf");
-    lines.push(format!("{} | {}", demux_cmd, encoder_cmd));
+    lines.push(format!("{demux_cmd} | {encoder_cmd}"));
 
     // Étape 2: Encodage audio
     let audio_ext = match config.audio_mode {
