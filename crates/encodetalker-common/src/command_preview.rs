@@ -80,6 +80,23 @@ fn build_aom_preview(config: &EncodingConfig, output: &str) -> String {
     cmd
 }
 
+/// Générer preview de la commande d'encodage audio
+#[must_use]
+pub fn build_audio_preview(input: &Path, config: &EncodingConfig, output_audio: &str) -> String {
+    let input_display = input.display();
+    match &config.audio_mode {
+        AudioMode::Opus { bitrate } => {
+            format!("ffmpeg -i {input_display} -vn -c:a libopus -b:a {bitrate}k -map 0:a {output_audio}")
+        }
+        AudioMode::Copy => {
+            format!("ffmpeg -i {input_display} -vn -c:a copy -map 0:a {output_audio}")
+        }
+        AudioMode::Custom { codec, bitrate } => {
+            format!("ffmpeg -i {input_display} -vn -c:a {codec} -b:a {bitrate}k {output_audio}")
+        }
+    }
+}
+
 /// Générer preview du muxing final
 #[must_use]
 pub fn build_muxing_preview(video_ivf: &str, audio_file: &str, output: &Path) -> String {
@@ -104,12 +121,15 @@ pub fn build_full_pipeline_preview(
     let encoder_cmd = build_encoder_preview(config, "video.ivf");
     lines.push(format!("{} | {}", demux_cmd, encoder_cmd));
 
-    // Étape 2: Muxing
+    // Étape 2: Encodage audio
     let audio_ext = match config.audio_mode {
         AudioMode::Opus { .. } => "audio.opus",
         AudioMode::Copy => "audio.copy",
         AudioMode::Custom { ref codec, .. } => &format!("audio.{}", codec.to_lowercase()),
     };
+    lines.push(build_audio_preview(input, config, audio_ext));
+
+    // Étape 3: Muxing
     lines.push(build_muxing_preview("video.ivf", audio_ext, output));
 
     lines
