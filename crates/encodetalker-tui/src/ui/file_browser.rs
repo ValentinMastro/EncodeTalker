@@ -55,9 +55,11 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
                 2 +   // checkbox (2 chars)
                 2 +   // icône emoji (compte pour 2)
                 1 +   // espace après icône
-                14 +  // colonne taille (9 chars + " Mo" + 2 séparateurs) - uniquement pour vidéos
-                14 +  // colonne durée (11 chars "JJ:HH:MM:SS" + 3 séparateurs) - uniquement pour vidéos
-                2, // bordures du bloc
+                3 +   // " | " avant taille
+                12 +  // colonne taille ("   123456 Mo")
+                3 +   // " | " avant durée
+                11 +  // colonne durée ("00:00:05:30")
+                4, // bordures du bloc + marge pour emojis
             );
 
             // Formatter la taille (uniquement pour vidéos, arrondi au Mo)
@@ -74,10 +76,10 @@ pub fn render_file_browser(frame: &mut Frame, area: Rect, state: &AppState) {
             let duration_str = if entry.is_video {
                 entry
                     .duration_secs
-                    .map(|s| format!("{:>11}", format_duration(s)))
+                    .map(|s| format_duration(s))
                     .unwrap_or_else(|| "          ?".to_string())
             } else {
-                "            ".to_string() // vide pour les non-vidéos
+                "           ".to_string() // vide pour les non-vidéos
             };
 
             // Tronquer le nom si trop long
