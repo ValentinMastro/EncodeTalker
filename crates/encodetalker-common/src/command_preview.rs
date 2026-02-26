@@ -41,13 +41,13 @@ fn build_svt_av1_preview(config: &EncodingConfig, output: &str) -> String {
     cmd.push_str(" --progress 2");
 
     // Paramètres communs à tous les types de contenu
-    let naf = match config.encoder_params.content_type {
+    let nns = match config.encoder_params.content_type {
         VideoContentType::Anime => 4,
         _ => 1,
     };
     let _ = write!(
         cmd,
-        " --qm-min 8 --noise-adaptive-filtering {naf} --complex-hvs 1 --enable-dlf 2"
+        " --qm-min 8 --noise-norm-strength {nns} --enable-dlf 2"
     );
 
     // Extra params

@@ -382,13 +382,12 @@ impl EncodingPipeline {
             .arg(output);
 
         // Paramètres communs à tous les types de contenu
-        let naf = match job.config.encoder_params.content_type {
+        let nns = match job.config.encoder_params.content_type {
             encodetalker_common::VideoContentType::Anime => "4",
             _ => "1",
         };
         cmd.arg("--qm-min").arg("8");
-        cmd.arg("--noise-adaptive-filtering").arg(naf);
-        cmd.arg("--complex-hvs").arg("1");
+        cmd.arg("--noise-norm-strength").arg(nns);
         cmd.arg("--enable-dlf").arg("2");
 
         // Ajouter les paramètres extra
