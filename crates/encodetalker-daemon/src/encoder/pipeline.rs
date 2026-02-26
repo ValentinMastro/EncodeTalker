@@ -17,6 +17,255 @@ fn get_available_threads() -> u32 {
     std::thread::available_parallelism().map_or(1, |n| n.get().min(u32::MAX as usize) as u32)
 }
 
+// ============================================================================
+// Fonctions helper pour refactoring des fonctions too_many_lines
+// ============================================================================
+
+/// Spawner un thread OS pour parser stderr ligne par ligne
+fn spawn_stderr_parser_thread<F>(
+    stderr: std::process::ChildStderr,
+    parse_fn: F,
+) -> std::thread::JoinHandle<()>
+where
+    F: Fn(&str) + Send + 'static,
+{
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            let line = line.trim();
+            if !line.is_empty() {
+                parse_fn(line);
+            }
+        }
+        tracing::debug!("Lecture stderr terminée");
+    })
+}
+
+/// Attendre deux processus avec support d'annulation via mpsc
+async fn wait_for_processes_with_cancellation(
+    ffmpeg_child: std::process::Child,
+    encoder_child: std::process::Child,
+    cancel_rx: &mut mpsc::UnboundedReceiver<()>,
+) -> Result<()> {
+    let ffmpeg_arc = std::sync::Arc::new(std::sync::Mutex::new(ffmpeg_child));
+    let encoder_arc = std::sync::Arc::new(std::sync::Mutex::new(encoder_child));
+
+    let ffmpeg_clone = ffmpeg_arc.clone();
+    let encoder_clone = encoder_arc.clone();
+
+    tokio::select! {
+        _ = cancel_rx.recv() => {
+            info!("Annulation demandée, arrêt des processus");
+            if let Ok(mut encoder) = encoder_arc.lock() {
+                let _ = encoder.kill();
+            }
+            if let Ok(mut ffmpeg) = ffmpeg_arc.lock() {
+                let _ = ffmpeg.kill();
+            }
+            anyhow::bail!("Encodage annulé");
+        }
+        result = tokio::task::spawn_blocking(move || {
+            tracing::debug!("Attente de la fin de l'encodeur...");
+            let encoder_status = encoder_clone.lock().unwrap().wait()
+                .context("Échec d'attente de l'encodeur")?;
+            if !encoder_status.success() {
+                anyhow::bail!("L'encodeur a échoué avec le code {:?}", encoder_status.code());
+            }
+            tracing::debug!("Encodeur terminé avec succès");
+
+            tracing::debug!("Attente de la fin de ffmpeg...");
+            let ffmpeg_status = ffmpeg_clone.lock().unwrap().wait()
+                .context("Échec d'attente de ffmpeg")?;
+            if !ffmpeg_status.success() {
+                anyhow::bail!("ffmpeg a échoué avec le code {:?}", ffmpeg_status.code());
+            }
+            tracing::debug!("ffmpeg terminé avec succès");
+
+            Ok::<(), anyhow::Error>(())
+        }) => {
+            result??;
+        }
+    }
+
+    Ok(())
+}
+
+/// Attendre un processus avec support d'annulation via mpsc
+async fn wait_for_process_with_cancellation(
+    child: std::process::Child,
+    cancel_rx: &mut mpsc::UnboundedReceiver<()>,
+) -> Result<()> {
+    let child_arc = std::sync::Arc::new(std::sync::Mutex::new(child));
+    let child_clone = child_arc.clone();
+
+    tokio::select! {
+        _ = cancel_rx.recv() => {
+            info!("Annulation demandée");
+            if let Ok(mut child) = child_arc.lock() {
+                let _ = child.kill();
+            }
+            anyhow::bail!("Opération annulée");
+        }
+        result = tokio::task::spawn_blocking(move || {
+            let status = child_clone.lock().unwrap().wait()
+                .context("Échec d'attente du processus")?;
+            if !status.success() {
+                anyhow::bail!("Processus échoué avec le code {:?}", status.code());
+            }
+            Ok::<(), anyhow::Error>(())
+        }) => {
+            result??;
+        }
+    }
+
+    Ok(())
+}
+
+/// Construire la commande ffmpeg pour décoder la vidéo
+fn build_ffmpeg_decode_command(
+    ffmpeg_bin: &Path,
+    input: &Path,
+    pix_fmt: &str,
+    is_interlaced: bool,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(ffmpeg_bin);
+    cmd.arg("-nostats")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-i")
+        .arg(input);
+
+    if is_interlaced {
+        info!("Application du filtre yadif (désentrelacement)");
+        cmd.arg("-vf").arg("yadif");
+    }
+
+    cmd.arg("-f")
+        .arg("yuv4mpegpipe")
+        .arg("-pix_fmt")
+        .arg(pix_fmt)
+        .arg("-strict")
+        .arg("-1")
+        .arg("-")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    cmd
+}
+
+/// Construire la commande ffmpeg pour calculer le VMAF
+fn build_vmaf_command(
+    ffmpeg_bin: &Path,
+    input_ref: &Path,
+    input_distorted: &Path,
+    vmaf_log: &Path,
+    threads: u32,
+) -> std::process::Command {
+    let vmaf_filter = format!(
+        "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
+        vmaf_log.display()
+    );
+
+    let mut cmd = std::process::Command::new(ffmpeg_bin);
+    cmd.arg("-i")
+        .arg(input_ref)
+        .arg("-i")
+        .arg(input_distorted)
+        .arg("-lavfi")
+        .arg(&vmaf_filter)
+        .arg("-f")
+        .arg("null")
+        .arg("-")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+
+    cmd
+}
+
+/// Parser le fichier JSON VMAF pour extraire les scores
+fn parse_vmaf_json_log(vmaf_json: &str) -> Result<(Option<f64>, Option<f64>, Option<f64>)> {
+    let vmaf_data: serde_json::Value =
+        serde_json::from_str(vmaf_json).context("Échec du parsing JSON VMAF")?;
+
+    let vmaf_metrics = vmaf_data.get("pooled_metrics").and_then(|p| p.get("vmaf"));
+
+    let vmaf_mean = vmaf_metrics
+        .and_then(|v| v.get("mean"))
+        .and_then(serde_json::Value::as_f64);
+    let vmaf_min = vmaf_metrics
+        .and_then(|v| v.get("min"))
+        .and_then(serde_json::Value::as_f64);
+    let vmaf_max = vmaf_metrics
+        .and_then(|v| v.get("max"))
+        .and_then(serde_json::Value::as_f64);
+
+    Ok((vmaf_mean, vmaf_min, vmaf_max))
+}
+
+/// Spawner un thread pour parser stderr de ffmpeg VMAF (byte par byte pour \r)
+fn spawn_vmaf_stderr_parser_thread(
+    stderr: std::process::ChildStderr,
+    total_frames: u64,
+    stats_tx: mpsc::UnboundedSender<EncodingStats>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut reader = BufReader::new(stderr);
+        let mut buffer = Vec::new();
+        let mut byte = [0u8; 1];
+
+        loop {
+            match reader.read(&mut byte) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if byte[0] == b'\r' || byte[0] == b'\n' {
+                        if !buffer.is_empty() {
+                            if let Ok(line) = String::from_utf8(buffer.clone()) {
+                                let line = line.trim();
+                                if let Some(frame_str) = line
+                                    .strip_prefix("frame=")
+                                    .or_else(|| line.find("frame=").map(|pos| &line[pos + 6..]))
+                                {
+                                    if let Some(frame_num) = frame_str
+                                        .split_whitespace()
+                                        .next()
+                                        .and_then(|s| s.parse::<u64>().ok())
+                                    {
+                                        let mut stats = EncodingStats {
+                                            frame: frame_num,
+                                            total_frames: Some(total_frames),
+                                            is_calculating_vmaf: true,
+                                            ..EncodingStats::default()
+                                        };
+                                        stats.calculate_progress();
+                                        if stats_tx.send(stats).is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            buffer.clear();
+                        }
+                    } else {
+                        buffer.push(byte[0]);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Erreur lecture stderr ffmpeg VMAF: {e}");
+                    break;
+                }
+            }
+        }
+        tracing::debug!("Lecture stderr ffmpeg VMAF terminée");
+    })
+}
+
+// ============================================================================
+// Pipeline d'encodage
+// ============================================================================
+
 /// Pipeline d'encodage complet
 pub struct EncodingPipeline {
     ffmpeg_bin: PathBuf,
@@ -171,7 +420,6 @@ impl EncodingPipeline {
     }
 
     /// Lancer une passe d'encodage (ffmpeg → encodeur via pipe kernel)
-    #[allow(clippy::too_many_lines)] // Pipeline complexe : ffmpeg, encodeur, parsing, annulation
     async fn run_encode_pass(
         &self,
         job: &EncodingJob,
@@ -180,36 +428,15 @@ impl EncodingPipeline {
         stats_tx: mpsc::UnboundedSender<EncodingStats>,
         cancel_rx: &mut mpsc::UnboundedReceiver<()>,
     ) -> Result<()> {
-        // 1. Spawner ffmpeg avec std::process (stdout piped)
-        let mut ffmpeg_cmd = std::process::Command::new(&self.ffmpeg_bin);
-        ffmpeg_cmd
-            .arg("-nostats")
-            .arg("-loglevel")
-            .arg("error")
-            .arg("-i")
-            .arg(&job.input_path);
-
-        // Appliquer yadif si la vidéo est entrelacée
-        if video_info.is_interlaced {
-            info!("Application du filtre yadif (désentrelacement)");
-            ffmpeg_cmd.arg("-vf").arg("yadif");
-        }
-
-        ffmpeg_cmd
-            .arg("-f")
-            .arg("yuv4mpegpipe")
-            .arg("-pix_fmt")
-            .arg("yuv420p10le")
-            .arg("-strict")
-            .arg("-1")
-            .arg("-")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
+        // 1. Construire et spawner ffmpeg
+        let mut ffmpeg_cmd = build_ffmpeg_decode_command(
+            &self.ffmpeg_bin,
+            &job.input_path,
+            "yuv420p10le",
+            video_info.is_interlaced,
+        );
         let mut ffmpeg_child = ffmpeg_cmd.spawn().context("Échec du démarrage de ffmpeg")?;
 
-        // 2. Prendre stdout et stderr de ffmpeg
         let ffmpeg_stdout = ffmpeg_child
             .stdout
             .take()
@@ -219,7 +446,7 @@ impl EncodingPipeline {
             .take()
             .context("Impossible de prendre stderr de ffmpeg")?;
 
-        // 3. Spawner l'encodeur avec stdin = ffmpeg_stdout (pipe kernel direct)
+        // 2. Spawner l'encodeur avec stdin = ffmpeg_stdout (pipe kernel direct)
         let mut encoder_child = encoder_cmd
             .stdin(Stdio::from(ffmpeg_stdout))
             .stdout(Stdio::null())
@@ -232,15 +459,12 @@ impl EncodingPipeline {
             .take()
             .context("Impossible de prendre stderr de l'encodeur")?;
 
-        // 4. Lire stderr de l'encodeur dans un thread OS (pour la progression)
-        // Note: SvtAv1EncApp utilise \r pour mettre à jour la même ligne, donc on doit
-        // lire octet par octet et splitter sur \r ET \n
+        // 3. Parser stderr de l'encodeur (byte par byte pour gérer \r)
         let parser = StatsParser::new(video_info.total_frames, video_info.duration);
         let stats_tx_clone = stats_tx.clone();
 
         let encoder_stderr_handle = std::thread::spawn(move || {
             use std::io::Read;
-
             let mut reader = BufReader::new(encoder_stderr);
             let mut parser = parser;
             let mut buffer = Vec::new();
@@ -248,20 +472,15 @@ impl EncodingPipeline {
 
             loop {
                 match reader.read(&mut byte) {
-                    Ok(0) => break, // EOF
+                    Ok(0) => break,
                     Ok(_) => {
                         if byte[0] == b'\r' || byte[0] == b'\n' {
-                            // Ligne complète, parser
                             if !buffer.is_empty() {
                                 if let Ok(line) = String::from_utf8(buffer.clone()) {
                                     let line = line.trim();
                                     if !line.is_empty() {
-                                        // Parser la ligne (format SvtAv1EncApp ou aomenc)
                                         parser.parse_encoder_line(line);
-
-                                        // Envoyer les stats via le canal
-                                        if let Err(e) = stats_tx_clone.send(parser.clone_stats()) {
-                                            tracing::error!("Échec d'envoi des stats: {}", e);
+                                        if stats_tx_clone.send(parser.clone_stats()).is_err() {
                                             break;
                                         }
                                     }
@@ -273,88 +492,28 @@ impl EncodingPipeline {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Erreur lecture stderr encodeur: {}", e);
+                        tracing::error!("Erreur lecture stderr encodeur: {e}");
                         break;
                     }
                 }
             }
-
             tracing::debug!("Lecture stderr encodeur terminée");
         });
 
-        // 5. Drainer stderr de ffmpeg dans un autre thread OS
-        let ffmpeg_stderr_handle = std::thread::spawn(move || {
-            let reader = BufReader::new(ffmpeg_stderr);
-
-            for line in reader.lines().map_while(Result::ok) {
-                if !line.is_empty() {
-                    tracing::error!("ffmpeg stderr: {}", line);
-                }
-            }
-
-            tracing::debug!("Lecture stderr ffmpeg terminée");
+        // 4. Drainer stderr de ffmpeg
+        let ffmpeg_stderr_handle = spawn_stderr_parser_thread(ffmpeg_stderr, |line| {
+            tracing::error!("ffmpeg stderr: {line}");
         });
 
-        // 6. Attendre les processus avec possibilité d'annulation
-        let encoder_child_arc = std::sync::Arc::new(std::sync::Mutex::new(encoder_child));
-        let ffmpeg_child_arc = std::sync::Arc::new(std::sync::Mutex::new(ffmpeg_child));
+        // 5. Attendre les processus avec annulation
+        wait_for_processes_with_cancellation(ffmpeg_child, encoder_child, cancel_rx).await?;
 
-        let encoder_child_clone = encoder_child_arc.clone();
-        let ffmpeg_child_clone = ffmpeg_child_arc.clone();
-
-        tokio::select! {
-            _ = cancel_rx.recv() => {
-                info!("Annulation demandée, arrêt des processus");
-
-                // Kill les deux processus
-                if let Ok(mut encoder) = encoder_child_arc.lock() {
-                    let _ = encoder.kill();
-                }
-                if let Ok(mut ffmpeg) = ffmpeg_child_arc.lock() {
-                    let _ = ffmpeg.kill();
-                }
-
-                anyhow::bail!("Encodage annulé");
-            }
-            result = tokio::task::spawn_blocking(move || {
-                // Attendre l'encodeur d'abord (il consomme les données)
-                tracing::debug!("Attente de la fin de l'encodeur...");
-                let encoder_status = encoder_child_clone
-                    .lock()
-                    .unwrap()
-                    .wait()
-                    .context("Échec d'attente de l'encodeur")?;
-
-                if !encoder_status.success() {
-                    anyhow::bail!("L'encodeur a échoué avec le code {:?}", encoder_status.code());
-                }
-                tracing::debug!("Encodeur terminé avec succès");
-
-                // Attendre ffmpeg ensuite
-                tracing::debug!("Attente de la fin de ffmpeg...");
-                let ffmpeg_status = ffmpeg_child_clone
-                    .lock()
-                    .unwrap()
-                    .wait()
-                    .context("Échec d'attente de ffmpeg")?;
-
-                if !ffmpeg_status.success() {
-                    anyhow::bail!("ffmpeg a échoué avec le code {:?}", ffmpeg_status.code());
-                }
-                tracing::debug!("ffmpeg terminé avec succès");
-
-                Ok::<(), anyhow::Error>(())
-            }) => {
-                result??;
-            }
-        }
-
-        // 7. Joindre les threads stderr
+        // 6. Joindre les threads stderr
         if let Err(e) = encoder_stderr_handle.join() {
-            tracing::error!("Échec de jointure du thread stderr encodeur: {:?}", e);
+            tracing::error!("Échec de jointure du thread stderr encodeur: {e:?}");
         }
         if let Err(e) = ffmpeg_stderr_handle.join() {
-            tracing::error!("Échec de jointure du thread stderr ffmpeg: {:?}", e);
+            tracing::error!("Échec de jointure du thread stderr ffmpeg: {e:?}");
         }
 
         Ok(())
@@ -590,7 +749,6 @@ impl EncodingPipeline {
     }
 
     /// Calculer le score VMAF en comparant la source et le fichier encodé frame par frame
-    #[allow(clippy::too_many_lines)] // Calcul VMAF complet : ffmpeg, parsing stderr/JSON, annulation
     async fn calculate_vmaf(
         &self,
         job: &EncodingJob,
@@ -613,7 +771,7 @@ impl EncodingPipeline {
         };
         let _ = stats_tx.send(vmaf_stats.clone());
 
-        // Préparer le fichier JSON pour le log VMAF (conservé à côté de l'output)
+        // Préparer le fichier JSON pour le log VMAF
         let vmaf_log = {
             let stem = job
                 .output_path
@@ -630,28 +788,14 @@ impl EncodingPipeline {
             .threads
             .unwrap_or_else(get_available_threads);
 
-        // Construire le filtre lavfi pour VMAF
-        let vmaf_filter = format!(
-            "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
-            vmaf_log.display()
+        // Construire et spawner ffmpeg pour VMAF
+        let mut ffmpeg_cmd = build_vmaf_command(
+            &self.ffmpeg_bin,
+            &job.input_path,
+            &job.output_path,
+            &vmaf_log,
+            threads,
         );
-
-        // Lancer ffmpeg pour le calcul VMAF
-        let mut ffmpeg_cmd = std::process::Command::new(&self.ffmpeg_bin);
-        ffmpeg_cmd
-            .arg("-i")
-            .arg(&job.input_path) // Input 0: source (référence)
-            .arg("-i")
-            .arg(&job.output_path) // Input 1: encodé (distorted)
-            .arg("-lavfi")
-            .arg(&vmaf_filter)
-            .arg("-f")
-            .arg("null")
-            .arg("-")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped());
-
         let mut ffmpeg_child = ffmpeg_cmd
             .spawn()
             .context("Échec du démarrage de ffmpeg pour VMAF")?;
@@ -661,118 +805,27 @@ impl EncodingPipeline {
             .take()
             .context("Impossible de prendre stderr de ffmpeg VMAF")?;
 
-        // Parser stderr de ffmpeg pour la progression dans un thread OS
-        let total_frames = video_info.total_frames;
-        let stats_tx_clone = stats_tx.clone();
+        // Parser stderr pour la progression
+        let stderr_handle = spawn_vmaf_stderr_parser_thread(
+            ffmpeg_stderr,
+            video_info.total_frames.unwrap_or(0),
+            stats_tx.clone(),
+        );
 
-        let stderr_handle = std::thread::spawn(move || {
-            use std::io::Read;
-
-            let mut reader = BufReader::new(ffmpeg_stderr);
-            let mut buffer = Vec::new();
-            let mut byte = [0u8; 1];
-
-            // ffmpeg écrit la progression avec \r (retour chariot), pas \n
-            // Il faut lire byte par byte et splitter sur \r ET \n
-            loop {
-                match reader.read(&mut byte) {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        if byte[0] == b'\r' || byte[0] == b'\n' {
-                            if !buffer.is_empty() {
-                                if let Ok(line) = String::from_utf8(buffer.clone()) {
-                                    let line = line.trim();
-                                    if let Some(frame_str) = line
-                                        .strip_prefix("frame=")
-                                        .or_else(|| line.find("frame=").map(|pos| &line[pos + 6..]))
-                                    {
-                                        if let Some(frame_num) = frame_str
-                                            .split_whitespace()
-                                            .next()
-                                            .and_then(|s| s.parse::<u64>().ok())
-                                        {
-                                            let mut stats = EncodingStats {
-                                                frame: frame_num,
-                                                total_frames,
-                                                is_calculating_vmaf: true,
-                                                ..EncodingStats::default()
-                                            };
-                                            stats.calculate_progress();
-                                            if stats_tx_clone.send(stats).is_err() {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                buffer.clear();
-                            }
-                        } else {
-                            buffer.push(byte[0]);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Erreur lecture stderr ffmpeg VMAF: {e}");
-                        break;
-                    }
-                }
-            }
-
-            tracing::debug!("Lecture stderr ffmpeg VMAF terminée");
-        });
-
-        // Attendre avec possibilité d'annulation
-        let ffmpeg_child_arc = std::sync::Arc::new(std::sync::Mutex::new(ffmpeg_child));
-        let ffmpeg_child_clone = ffmpeg_child_arc.clone();
-
-        tokio::select! {
-            _ = cancel_rx.recv() => {
-                info!("Annulation VMAF demandée");
-                if let Ok(mut child) = ffmpeg_child_arc.lock() {
-                    let _ = child.kill();
-                }
-                anyhow::bail!("Calcul VMAF annulé");
-            }
-            result = tokio::task::spawn_blocking(move || {
-                let status = ffmpeg_child_clone
-                    .lock()
-                    .unwrap()
-                    .wait()
-                    .context("Échec d'attente de ffmpeg VMAF")?;
-
-                if !status.success() {
-                    anyhow::bail!("ffmpeg VMAF a échoué avec le code {:?}", status.code());
-                }
-                Ok::<(), anyhow::Error>(())
-            }) => {
-                result??;
-            }
-        }
+        // Attendre avec annulation
+        wait_for_process_with_cancellation(ffmpeg_child, cancel_rx).await?;
 
         // Joindre le thread stderr
         if let Err(e) = stderr_handle.join() {
-            tracing::error!("Échec de jointure du thread stderr VMAF: {:?}", e);
+            tracing::error!("Échec de jointure du thread stderr VMAF: {e:?}");
         }
 
-        // Parser le fichier JSON VMAF pour extraire les scores
+        // Parser le JSON VMAF
         let vmaf_json = tokio::fs::read_to_string(&vmaf_log)
             .await
             .context("Échec de lecture du fichier JSON VMAF")?;
 
-        let vmaf_data: serde_json::Value =
-            serde_json::from_str(&vmaf_json).context("Échec du parsing JSON VMAF")?;
-
-        // Extraire les scores depuis pooled_metrics.vmaf
-        let vmaf_metrics = vmaf_data.get("pooled_metrics").and_then(|p| p.get("vmaf"));
-
-        let vmaf_mean = vmaf_metrics
-            .and_then(|v| v.get("mean"))
-            .and_then(serde_json::Value::as_f64);
-        let vmaf_min = vmaf_metrics
-            .and_then(|v| v.get("min"))
-            .and_then(serde_json::Value::as_f64);
-        let vmaf_max = vmaf_metrics
-            .and_then(|v| v.get("max"))
-            .and_then(serde_json::Value::as_f64);
+        let (vmaf_mean, vmaf_min, vmaf_max) = parse_vmaf_json_log(&vmaf_json)?;
 
         if let Some(mean) = vmaf_mean {
             info!(
