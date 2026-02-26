@@ -701,14 +701,14 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
             config.config.enable_vmaf = !config.config.enable_vmaf;
         }
         6 => {
-            // Content Type: cycle Default → Anime → LiveAction → Default
+            // Content Type: cycle Default → Anime → LiveAction → GrainedFilm → Default
             config.config.encoder_params.content_type =
                 match config.config.encoder_params.content_type {
                     VideoContentType::Default => {
                         if increment {
                             VideoContentType::Anime
                         } else {
-                            VideoContentType::LiveAction
+                            VideoContentType::GrainedFilm
                         }
                     }
                     VideoContentType::Anime => {
@@ -720,9 +720,16 @@ fn toggle_field_value(config: &mut EncodeConfigDialog, increment: bool) {
                     }
                     VideoContentType::LiveAction => {
                         if increment {
-                            VideoContentType::Default
+                            VideoContentType::GrainedFilm
                         } else {
                             VideoContentType::Anime
+                        }
+                    }
+                    VideoContentType::GrainedFilm => {
+                        if increment {
+                            VideoContentType::Default
+                        } else {
+                            VideoContentType::LiveAction
                         }
                     }
                 };

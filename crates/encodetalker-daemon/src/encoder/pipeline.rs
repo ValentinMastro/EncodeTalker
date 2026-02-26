@@ -547,14 +547,35 @@ impl EncodingPipeline {
             .arg("-b")
             .arg(output);
 
-        // Paramètres communs à tous les types de contenu
-        let nns = match job.config.encoder_params.content_type {
-            encodetalker_common::VideoContentType::Anime => "4",
-            _ => "1",
-        };
-        cmd.arg("--qm-min").arg("8");
-        cmd.arg("--noise-norm-strength").arg(nns);
-        cmd.arg("--enable-dlf").arg("2");
+        // Paramètres spécifiques au type de contenu
+        match job.config.encoder_params.content_type {
+            encodetalker_common::VideoContentType::GrainedFilm => {
+                // Film granuleux : préservation du grain filmique
+                cmd.arg("--enable-cdef").arg("0");
+                cmd.arg("--enable-restoration").arg("0");
+                cmd.arg("--enable-tf").arg("0");
+                cmd.arg("--spy-rd").arg("1");
+                cmd.arg("--noise-norm-strength").arg("3");
+                cmd.arg("--qm-min").arg("10");
+                cmd.arg("--tune").arg("0");
+                cmd.arg("--qp-scale-compress-strength").arg("3");
+                cmd.arg("--scm").arg("0");
+                cmd.arg("--psy-rd").arg("4.0");
+                cmd.arg("--hbd-mds").arg("1");
+            }
+            encodetalker_common::VideoContentType::Anime => {
+                // Anime : réduction de bruit agressive
+                cmd.arg("--qm-min").arg("8");
+                cmd.arg("--noise-norm-strength").arg("4");
+                cmd.arg("--enable-dlf").arg("2");
+            }
+            _ => {
+                // Default et LiveAction : paramètres standards
+                cmd.arg("--qm-min").arg("8");
+                cmd.arg("--noise-norm-strength").arg("1");
+                cmd.arg("--enable-dlf").arg("2");
+            }
+        }
 
         // Ajouter les paramètres extra
         for param in &job.config.encoder_params.extra_params {

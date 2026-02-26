@@ -79,6 +79,8 @@ pub enum VideoContentType {
     Anime,
     /// Live Action / Vidéo réelle (tune 0, variance-boost 2)
     LiveAction,
+    /// Film granuleux / Contenu avec grain filmique (préservation du grain)
+    GrainedFilm,
 }
 
 impl std::fmt::Display for VideoContentType {
@@ -87,6 +89,7 @@ impl std::fmt::Display for VideoContentType {
             Self::Default => write!(f, "Par défaut"),
             Self::Anime => write!(f, "Anime"),
             Self::LiveAction => write!(f, "Live Action"),
+            Self::GrainedFilm => write!(f, "Film Granuleux"),
         }
     }
 }

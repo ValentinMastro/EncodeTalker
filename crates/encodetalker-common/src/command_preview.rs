@@ -40,15 +40,23 @@ fn build_svt_av1_preview(config: &EncodingConfig, output: &str) -> String {
 
     cmd.push_str(" --progress 2");
 
-    // Paramètres communs à tous les types de contenu
-    let nns = match config.encoder_params.content_type {
-        VideoContentType::Anime => 4,
-        _ => 1,
-    };
-    let _ = write!(
-        cmd,
-        " --qm-min 8 --noise-norm-strength {nns} --enable-dlf 2"
-    );
+    // Paramètres spécifiques au type de contenu
+    match config.encoder_params.content_type {
+        VideoContentType::GrainedFilm => {
+            let _ = write!(
+                cmd,
+                " --enable-cdef 0 --enable-restoration 0 --enable-tf 0 --spy-rd 1 \
+                 --noise-norm-strength 3 --qm-min 10 --tune 0 --qp-scale-compress-strength 3 \
+                 --scm 0 --psy-rd 4.0 --hbd-mds 1"
+            );
+        }
+        VideoContentType::Anime => {
+            let _ = write!(cmd, " --qm-min 8 --noise-norm-strength 4 --enable-dlf 2");
+        }
+        _ => {
+            let _ = write!(cmd, " --qm-min 8 --noise-norm-strength 1 --enable-dlf 2");
+        }
+    }
 
     // Extra params
     for param in &config.encoder_params.extra_params {
