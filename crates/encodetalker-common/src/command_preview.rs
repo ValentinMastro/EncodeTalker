@@ -99,24 +99,18 @@ pub fn build_full_pipeline_preview(
 ) -> Vec<String> {
     let mut lines = Vec::new();
 
-    // Étape 1: Demux
+    // Étape 1: Demux + Encode (combinés avec pipe)
     let demux_cmd = build_ffmpeg_demux_preview(input, is_interlaced);
-    lines.push(format!("1. Demux: {demux_cmd}"));
-
-    // Étape 2: Encode
     let encoder_cmd = build_encoder_preview(config, "video.ivf");
-    lines.push(format!("2. Encode: {encoder_cmd}"));
+    lines.push(format!("{} | {}", demux_cmd, encoder_cmd));
 
-    // Étape 3: Muxing
+    // Étape 2: Muxing
     let audio_ext = match config.audio_mode {
         AudioMode::Opus { .. } => "audio.opus",
         AudioMode::Copy => "audio.copy",
         AudioMode::Custom { ref codec, .. } => &format!("audio.{}", codec.to_lowercase()),
     };
-    lines.push(format!(
-        "3. Mux: {}",
-        build_muxing_preview("video.ivf", audio_ext, output)
-    ));
+    lines.push(build_muxing_preview("video.ivf", audio_ext, output));
 
     lines
 }
