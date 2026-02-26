@@ -28,6 +28,15 @@ pub fn render_dialog(frame: &mut Frame, area: Rect, state: &mut crate::app::AppS
                 state.layout.dialog_area = Some(dialog_area);
                 crate::ui::vmaf_graph::render_vmaf_graph(frame, area, data);
             }
+            Dialog::VideoInfo {
+                path,
+                output,
+                scroll_offset,
+            } => {
+                let dialog_area = centered_rect(90, 80, area);
+                state.layout.dialog_area = Some(dialog_area);
+                render_video_info_dialog(frame, area, path, output, *scroll_offset);
+            }
         }
     } else {
         state.layout.dialog_area = None;
@@ -373,4 +382,74 @@ pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+/// Rendre le dialogue d'information vidéo
+fn render_video_info_dialog(
+    frame: &mut Frame,
+    area: Rect,
+    path: &std::path::Path,
+    output: &str,
+    scroll_offset: usize,
+) {
+    // Dialogue 90% largeur, 80% hauteur
+    let dialog_area = centered_rect(90, 80, area);
+
+    // Clear background
+    frame.render_widget(Clear, dialog_area);
+
+    // Titre avec nom du fichier
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("fichier");
+    let title = format!(" Informations : {filename} ");
+
+    // Block avec bordures
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(dialog_area);
+    frame.render_widget(block, dialog_area);
+
+    // Préparer le texte avec scroll
+    let lines: Vec<&str> = output.lines().collect();
+    let visible_height = inner.height as usize;
+    let visible_lines: Vec<&str> = lines
+        .iter()
+        .skip(scroll_offset)
+        .take(visible_height)
+        .copied()
+        .collect();
+
+    let text = visible_lines.join("\n");
+
+    // Afficher le texte avec wrap
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(paragraph, inner);
+
+    // Indicateur de scroll en bas à droite
+    let total_lines = lines.len();
+    if total_lines > visible_height {
+        let scroll_indicator = format!(
+            " {}/{} ",
+            scroll_offset + 1,
+            total_lines.saturating_sub(visible_height) + 1
+        );
+        #[allow(clippy::cast_possible_truncation)]
+        let indicator_width = scroll_indicator.len() as u16;
+        let indicator_area = Rect {
+            x: dialog_area.x + dialog_area.width.saturating_sub(indicator_width + 1),
+            y: dialog_area.y + dialog_area.height - 1,
+            width: indicator_width,
+            height: 1,
+        };
+        let indicator = Paragraph::new(scroll_indicator).style(Style::default().fg(Color::Yellow));
+        frame.render_widget(indicator, indicator_area);
+    }
 }

@@ -529,6 +529,12 @@ pub enum Dialog {
     Error { message: String },
     /// Graphe VMAF par frame
     VmafGraph(VmafGraphData),
+    /// Dialogue d'information vidéo (sortie de ffmpeg -i)
+    VideoInfo {
+        path: PathBuf,
+        output: String,
+        scroll_offset: usize,
+    },
 }
 
 /// Actions de confirmation

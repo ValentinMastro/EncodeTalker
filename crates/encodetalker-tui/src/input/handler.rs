@@ -89,27 +89,44 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
             .layout
             .dialog_area
             .expect("dialog_area doit être Some si dialog est Some");
-        // Scroll dans le dialogue (EncodeConfig uniquement)
-        if matches!(state.dialog, Some(Dialog::EncodeConfig(_))) {
-            match kind {
+        // Scroll dans le dialogue
+        match &mut state.dialog {
+            Some(Dialog::EncodeConfig(ref mut config)) => match kind {
                 MouseEventKind::ScrollUp => {
-                    if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
-                        if config.selected_field > 0 {
-                            config.selected_field -= 1;
-                        }
+                    if config.selected_field > 0 {
+                        config.selected_field -= 1;
                     }
                     return InputAction::None;
                 }
                 MouseEventKind::ScrollDown => {
-                    if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
-                        if config.selected_field < 7 {
-                            config.selected_field += 1;
-                        }
+                    if config.selected_field < 7 {
+                        config.selected_field += 1;
                     }
                     return InputAction::None;
                 }
                 _ => {}
+            },
+            Some(Dialog::VideoInfo {
+                scroll_offset,
+                output,
+                ..
+            }) => {
+                match kind {
+                    MouseEventKind::ScrollUp => {
+                        *scroll_offset = scroll_offset.saturating_sub(1);
+                        return InputAction::None;
+                    }
+                    MouseEventKind::ScrollDown => {
+                        let total_lines = output.lines().count();
+                        let visible_lines = 40; // Approximation
+                        let max_scroll = total_lines.saturating_sub(visible_lines);
+                        *scroll_offset = (*scroll_offset + 1).min(max_scroll);
+                        return InputAction::None;
+                    }
+                    _ => {}
+                }
             }
+            _ => {}
         }
 
         // Clic dans la zone du dialogue
@@ -316,6 +333,45 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
             state.selected_index = 0;
             InputAction::None
         }
+
+        KeyCode::Char('i') => {
+            // Afficher les informations vidéo (ffmpeg -i)
+            if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
+                if entry.is_video {
+                    let file_path = state.file_browser.current_dir.join(&entry.name);
+
+                    // Récupérer le chemin ffmpeg depuis deps (même logique que daemon)
+                    let ffmpeg_bin = dirs::data_local_dir()
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        .join("encodetalker/deps/bin/ffmpeg");
+
+                    // Exécuter ffmpeg -hide_banner -i <fichier>
+                    match std::process::Command::new(&ffmpeg_bin)
+                        .arg("-hide_banner")
+                        .arg("-i")
+                        .arg(&file_path)
+                        .output()
+                    {
+                        Ok(output) => {
+                            // ffmpeg écrit les infos sur stderr
+                            let info = String::from_utf8_lossy(&output.stderr).to_string();
+                            state.dialog = Some(Dialog::VideoInfo {
+                                path: file_path,
+                                output: info,
+                                scroll_offset: 0,
+                            });
+                        }
+                        Err(e) => {
+                            state.dialog = Some(Dialog::Error {
+                                message: format!("Impossible de lancer ffmpeg: {e}"),
+                            });
+                        }
+                    }
+                }
+            }
+            InputAction::None
+        }
+
         _ => InputAction::None,
     }
 }
@@ -462,6 +518,35 @@ fn handle_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
                 state.dialog = None;
             }
             InputAction::None
+        }
+        Some(Dialog::VideoInfo { .. }) => {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    state.dialog = None;
+                    InputAction::None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if let Some(Dialog::VideoInfo { scroll_offset, .. }) = &mut state.dialog {
+                        *scroll_offset = scroll_offset.saturating_sub(1);
+                    }
+                    InputAction::None
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if let Some(Dialog::VideoInfo {
+                        scroll_offset,
+                        output,
+                        ..
+                    }) = &mut state.dialog
+                    {
+                        let total_lines = output.lines().count();
+                        let visible_lines = 40; // Approximation
+                        let max_scroll = total_lines.saturating_sub(visible_lines);
+                        *scroll_offset = (*scroll_offset + 1).min(max_scroll);
+                    }
+                    InputAction::None
+                }
+                _ => InputAction::None,
+            }
         }
         None => InputAction::None,
     }
