@@ -17,9 +17,14 @@ fn test_video_dir() -> PathBuf {
         .join("vidéos_de_test")
 }
 
-/// Chemin vers les binaires compilés
+/// Chemin vers les binaires compilés (.dependencies/bin à la racine du projet)
 fn deps_bin_dir() -> PathBuf {
-    PathBuf::from(env!("HOME")).join(".local/share/encodetalker/deps/bin")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join(".dependencies/bin")
 }
 
 #[tokio::test]
