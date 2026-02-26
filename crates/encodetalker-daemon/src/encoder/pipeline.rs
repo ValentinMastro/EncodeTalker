@@ -161,9 +161,16 @@ fn build_vmaf_command(
     input_distorted: &Path,
     vmaf_log: &Path,
     threads: u32,
+    is_interlaced: bool,
 ) -> std::process::Command {
+    let ref_filter = if is_interlaced {
+        "[0:v]yadif,setpts=PTS-STARTPTS[ref]"
+    } else {
+        "[0:v]setpts=PTS-STARTPTS[ref]"
+    };
+
     let vmaf_filter = format!(
-        "[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
+        "{ref_filter};[1:v]setpts=PTS-STARTPTS[dist];[dist][ref]libvmaf=n_threads={threads}:n_subsample=1:log_path={}:log_fmt=json",
         vmaf_log.display()
     );
 
@@ -795,6 +802,7 @@ impl EncodingPipeline {
             &job.output_path,
             &vmaf_log,
             threads,
+            video_info.is_interlaced,
         );
         let mut ffmpeg_child = ffmpeg_cmd
             .spawn()
