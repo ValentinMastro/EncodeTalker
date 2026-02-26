@@ -40,16 +40,15 @@ fn build_svt_av1_preview(config: &EncodingConfig, output: &str) -> String {
 
     cmd.push_str(" --progress 2");
 
-    // Ajouter paramètres content_type
-    match config.encoder_params.content_type {
-        VideoContentType::Anime => {
-            cmd.push_str(" --tune 0 --variance-boost-strength 1 --variance-octile 6 --enable-qm 1 --qm-min 0");
-        }
-        VideoContentType::LiveAction => {
-            cmd.push_str(" --tune 0 --variance-boost-strength 2 --variance-octile 6 --enable-qm 1 --qm-min 0");
-        }
-        VideoContentType::Default => {}
-    }
+    // Paramètres communs à tous les types de contenu
+    let naf = match config.encoder_params.content_type {
+        VideoContentType::Anime => 4,
+        _ => 1,
+    };
+    let _ = write!(
+        cmd,
+        " --qm-min 8 --noise-adaptive-filtering {naf} --complex-hvs 1 --enable-dlf 2"
+    );
 
     // Extra params
     for param in &config.encoder_params.extra_params {
