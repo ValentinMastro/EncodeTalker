@@ -71,8 +71,8 @@ cargo test -p encodetalker-common
 # Formatage (à faire AVANT de committer)
 cargo fmt --all
 
-# Linting (corriger tous les warnings)
-cargo clippy --all-targets --all-features
+# Linting (corriger tous les warnings, mode pedantic)
+cargo clippy --all-targets --all-features -- -W clippy::pedantic
 ```
 
 ## 🚀 Lancement
@@ -307,8 +307,8 @@ chore: mettre à jour les dépendances Rust
 # 1. Formatter le code
 cargo fmt --all
 
-# 2. Vérifier clippy
-cargo clippy --all-targets --all-features
+# 2. Vérifier clippy (mode pedantic)
+cargo clippy --all-targets --all-features -- -W clippy::pedantic
 
 # 3. Lancer les tests
 cargo test --all
