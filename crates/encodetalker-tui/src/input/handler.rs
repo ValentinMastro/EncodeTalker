@@ -1,6 +1,9 @@
-use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View, VmafGraphData};
+use crate::app::{
+    AppState, ConfirmAction, Dialog, EncodeConfigDialog, LastClick, View, VmafGraphData,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use encodetalker_common::{AudioMode, EncoderType, VideoContentType};
+use std::time::{Duration, Instant};
 
 /// Obtenir le nombre max de threads disponibles sur la machine
 ///
@@ -67,6 +70,9 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
 }
 
 /// Gérer un événement souris
+///
+/// # Panics
+/// Panic si `state.dialog` est `Some` mais `state.layout.dialog_area` est `None` (incohérence d'état).
 pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputAction {
     // Ignorer complètement la souris en mode Loading
     if state.current_view == View::Loading {
@@ -78,7 +84,11 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
     } = mouse;
 
     // Priorité au dialogue si ouvert
-    if let Some(dialog_area) = state.layout.dialog_area {
+    if state.dialog.is_some() {
+        let dialog_area = state
+            .layout
+            .dialog_area
+            .expect("dialog_area doit être Some si dialog est Some");
         // Scroll dans le dialogue (EncodeConfig uniquement)
         if matches!(state.dialog, Some(Dialog::EncodeConfig(_))) {
             match kind {
@@ -112,9 +122,11 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
             return InputAction::None;
         }
 
-        // Clic en dehors du dialogue → fermer
+        // Clic en dehors du dialogue → fermer et réinitialiser le tracking de clic
         if matches!(kind, MouseEventKind::Down(MouseButton::Left)) {
             state.dialog = None;
+            state.layout.dialog_area = None; // Libérer la zone du dialogue
+            state.last_click = None; // Empêcher faux double-clic après fermeture
             return InputAction::None;
         }
 
@@ -160,9 +172,29 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
             // Vérifier que l'index est valide
             let list_len = state.get_current_list_len();
             if clicked_index < list_len {
+                // Détecter le double-clic (même position dans les 500ms)
+                let now = Instant::now();
+                let is_double_click = state.last_click.as_ref().is_some_and(|last| {
+                    now.duration_since(last.timestamp) < Duration::from_millis(500)
+                        && last.row == row
+                        && last.column == column
+                });
+
+                // Enregistrer ce clic
+                state.last_click = Some(LastClick {
+                    timestamp: now,
+                    row,
+                    column,
+                });
+
                 state.selected_index = clicked_index;
 
-                // FileBrowser : toggle selection si vidéo
+                // Double-clic dans FileBrowser → action Enter (ouvrir dossier ou dialogue)
+                if is_double_click && state.current_view == View::FileBrowser {
+                    return handle_file_browser_enter(state);
+                }
+
+                // Simple clic dans FileBrowser : toggle selection si vidéo
                 if state.current_view == View::FileBrowser {
                     state.file_browser.toggle_selection(clicked_index);
                 }
@@ -202,6 +234,30 @@ pub enum InputAction {
     ClearHistory,
 }
 
+/// Gérer l'action Enter dans le file browser (ouvrir dossier ou dialogue encodage)
+fn handle_file_browser_enter(state: &mut AppState) -> InputAction {
+    let selected_files = state.file_browser.get_selected_files();
+
+    if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
+        if entry.is_dir {
+            // Toujours naviguer dans les dossiers (priorité)
+            state.file_browser.navigate_to(entry.path.clone());
+            state.selected_index = 0;
+        } else if !selected_files.is_empty() {
+            // Batch avec fichiers sélectionnés
+            state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new_batch(
+                selected_files,
+            )));
+        } else if entry.is_video {
+            // Single file: comportement actuel
+            state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
+                entry.path.clone(),
+            )));
+        }
+    }
+    InputAction::None
+}
+
 /// Gérer les touches dans le file browser
 fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
     match key.code {
@@ -233,28 +289,7 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
         }
 
         // Logique Enter pour batch
-        KeyCode::Enter => {
-            let selected_files = state.file_browser.get_selected_files();
-
-            if let Some(entry) = state.file_browser.get_selected(state.selected_index) {
-                if entry.is_dir {
-                    // Toujours naviguer dans les dossiers (priorité)
-                    state.file_browser.navigate_to(entry.path.clone());
-                    state.selected_index = 0;
-                } else if !selected_files.is_empty() {
-                    // Batch avec fichiers sélectionnés
-                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new_batch(
-                        selected_files,
-                    )));
-                } else if entry.is_video {
-                    // Single file: comportement actuel
-                    state.dialog = Some(Dialog::EncodeConfig(EncodeConfigDialog::new(
-                        entry.path.clone(),
-                    )));
-                }
-            }
-            InputAction::None
-        }
+        KeyCode::Enter => handle_file_browser_enter(state),
 
         // 'a' : Shortcut pour single file (ignore les sélections, compatibilité)
         KeyCode::Char('a') => {

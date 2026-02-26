@@ -3,6 +3,7 @@ use encodetalker_common::{EncodingConfig, EncodingJob};
 use ratatui::prelude::Rect;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 /// Rectangles de layout calculés pendant le rendu (pour le hit-testing souris)
 #[derive(Default, Clone, Debug)]
@@ -11,6 +12,14 @@ pub struct LayoutRects {
     pub content: Rect,
     pub content_inner: Rect,
     pub dialog_area: Option<Rect>,
+}
+
+/// Dernier clic (pour détecter le double-clic)
+#[derive(Clone, Debug)]
+pub struct LastClick {
+    pub timestamp: Instant,
+    pub row: u16,
+    pub column: u16,
 }
 
 /// Données VMAF par frame parsées pour l'affichage du graphe
@@ -235,6 +244,8 @@ pub struct AppState {
     pub status_message: Option<String>,
     /// Layout rectangles (pour hit-testing souris)
     pub layout: LayoutRects,
+    /// Dernier clic (pour détection double-clic)
+    pub last_click: Option<LastClick>,
 }
 
 impl AppState {
@@ -252,6 +263,7 @@ impl AppState {
             dialog: None,
             status_message: None,
             layout: LayoutRects::default(),
+            last_click: None,
         }
     }
 
