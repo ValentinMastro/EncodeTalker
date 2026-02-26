@@ -154,54 +154,7 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
 
     // Clic gauche sur un item de la zone de contenu
     if matches!(kind, MouseEventKind::Down(MouseButton::Left)) {
-        let content_inner = state.layout.content_inner;
-
-        if column >= content_inner.x
-            && column < content_inner.x + content_inner.width
-            && row >= content_inner.y
-            && row < content_inner.y + content_inner.height
-        {
-            // Calculer l'index cliqué (approximation du scroll)
-            #[allow(clippy::cast_possible_truncation)]
-            let visible_height = content_inner.height.saturating_sub(1) as usize;
-            let scroll_offset = state.selected_index.saturating_sub(visible_height);
-            #[allow(clippy::cast_possible_truncation)]
-            let relative_row = row.saturating_sub(content_inner.y) as usize;
-            let clicked_index = scroll_offset + relative_row;
-
-            // Vérifier que l'index est valide
-            let list_len = state.get_current_list_len();
-            if clicked_index < list_len {
-                // Détecter le double-clic (même position dans les 500ms)
-                let now = Instant::now();
-                let is_double_click = state.last_click.as_ref().is_some_and(|last| {
-                    now.duration_since(last.timestamp) < Duration::from_millis(500)
-                        && last.row == row
-                        && last.column == column
-                });
-
-                // Enregistrer ce clic
-                state.last_click = Some(LastClick {
-                    timestamp: now,
-                    row,
-                    column,
-                });
-
-                state.selected_index = clicked_index;
-
-                // Double-clic dans FileBrowser → action Enter (ouvrir dossier ou dialogue)
-                if is_double_click && state.current_view == View::FileBrowser {
-                    return handle_file_browser_enter(state);
-                }
-
-                // Simple clic dans FileBrowser : toggle selection si vidéo
-                if state.current_view == View::FileBrowser {
-                    state.file_browser.toggle_selection(clicked_index);
-                }
-            }
-
-            return InputAction::None;
-        }
+        return handle_content_click(state, row, column);
     }
 
     InputAction::None
@@ -232,6 +185,60 @@ pub enum InputAction {
         job_id: uuid::Uuid,
     },
     ClearHistory,
+}
+
+/// Gérer un clic sur le contenu (détection double-clic et sélection)
+fn handle_content_click(state: &mut AppState, row: u16, column: u16) -> InputAction {
+    let content_inner = state.layout.content_inner;
+
+    if column >= content_inner.x
+        && column < content_inner.x + content_inner.width
+        && row >= content_inner.y
+        && row < content_inner.y + content_inner.height
+    {
+        // Calculer l'index cliqué (approximation du scroll)
+        #[allow(clippy::cast_possible_truncation)]
+        let visible_height = content_inner.height.saturating_sub(1) as usize;
+        let scroll_offset = state.selected_index.saturating_sub(visible_height);
+        #[allow(clippy::cast_possible_truncation)]
+        let relative_row = row.saturating_sub(content_inner.y) as usize;
+        let clicked_index = scroll_offset + relative_row;
+
+        // Vérifier que l'index est valide
+        let list_len = state.get_current_list_len();
+        if clicked_index < list_len {
+            // Détecter le double-clic (même position dans les 500ms)
+            let now = Instant::now();
+            let is_double_click = state.last_click.as_ref().is_some_and(|last| {
+                now.duration_since(last.timestamp) < Duration::from_millis(500)
+                    && last.row == row
+                    && last.column == column
+            });
+
+            // Enregistrer ce clic
+            state.last_click = Some(LastClick {
+                timestamp: now,
+                row,
+                column,
+            });
+
+            state.selected_index = clicked_index;
+
+            // Double-clic dans FileBrowser → action Enter (ouvrir dossier ou dialogue)
+            if is_double_click && state.current_view == View::FileBrowser {
+                return handle_file_browser_enter(state);
+            }
+
+            // Simple clic dans FileBrowser : toggle selection si vidéo
+            if state.current_view == View::FileBrowser {
+                state.file_browser.toggle_selection(clicked_index);
+            }
+        }
+
+        return InputAction::None;
+    }
+
+    InputAction::None
 }
 
 /// Gérer l'action Enter dans le file browser (ouvrir dossier ou dialogue encodage)
