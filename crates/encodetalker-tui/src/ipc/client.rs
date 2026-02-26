@@ -387,8 +387,6 @@ pub async fn ensure_daemon_running(daemon_bin: &Path, socket_path: &Path) -> Res
     cmd.spawn().context("Échec du démarrage du daemon")?;
 
     info!("Attente du démarrage du daemon...");
-    info!("Note: La première fois, le daemon compile les dépendances (ffmpeg, SVT-AV1, etc.)");
-    info!("      Cela peut prendre 30-60 minutes. Veuillez patienter...");
 
     // Attendre que le socket soit créé (max 3 minutes)
     // La première fois, le daemon compile les dépendances avant de créer le socket

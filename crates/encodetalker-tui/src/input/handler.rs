@@ -340,10 +340,27 @@ fn handle_file_browser_key(state: &mut AppState, key: KeyEvent) -> InputAction {
                 if entry.is_video {
                     let file_path = state.file_browser.current_dir.join(&entry.name);
 
-                    // Récupérer le chemin ffmpeg depuis deps (même logique que daemon)
-                    let ffmpeg_bin = dirs::data_local_dir()
-                        .unwrap_or_else(|| std::path::PathBuf::from("."))
-                        .join("encodetalker/deps/bin/ffmpeg");
+                    // Chercher .dependencies/ en remontant depuis l'exécutable (mode portable)
+                    let find_portable_deps = || {
+                        let mut dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+                        loop {
+                            let candidate = dir.join(".dependencies");
+                            if candidate.is_dir() {
+                                return Some(candidate);
+                            }
+                            if !dir.pop() {
+                                return None;
+                            }
+                        }
+                    };
+
+                    // Chemin ffmpeg : .dependencies/bin/ffmpeg (portable) ou XDG
+                    let ffmpeg_bin = find_portable_deps()
+                        .map(|d| d.join("bin").join("ffmpeg"))
+                        .or_else(|| {
+                            dirs::data_local_dir().map(|d| d.join("encodetalker/deps/bin/ffmpeg"))
+                        })
+                        .unwrap_or_else(|| std::path::PathBuf::from("ffmpeg"));
 
                     // Exécuter ffmpeg -hide_banner -i <fichier>
                     match std::process::Command::new(&ffmpeg_bin)
