@@ -1,7 +1,17 @@
 use encodetalker_common::protocol::messages::{DepsCompilationStep, DepsStatusInfo};
 use encodetalker_common::{EncodingConfig, EncodingJob};
+use ratatui::prelude::Rect;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+/// Rectangles de layout calculés pendant le rendu (pour le hit-testing souris)
+#[derive(Default, Clone, Debug)]
+pub struct LayoutRects {
+    pub header: Rect,
+    pub content: Rect,
+    pub content_inner: Rect,
+    pub dialog_area: Option<Rect>,
+}
 
 /// Données VMAF par frame parsées pour l'affichage du graphe
 #[derive(Debug, Clone)]
@@ -223,6 +233,8 @@ pub struct AppState {
     pub dialog: Option<Dialog>,
     /// Message de status
     pub status_message: Option<String>,
+    /// Layout rectangles (pour hit-testing souris)
+    pub layout: LayoutRects,
 }
 
 impl AppState {
@@ -239,6 +251,7 @@ impl AppState {
             selected_index: 0,
             dialog: None,
             status_message: None,
+            layout: LayoutRects::default(),
         }
     }
 
@@ -264,7 +277,8 @@ impl AppState {
     }
 
     /// Obtenir la longueur de la liste active
-    fn get_current_list_len(&self) -> usize {
+    #[must_use]
+    pub fn get_current_list_len(&self) -> usize {
         match self.current_view {
             View::Loading => 0,
             View::FileBrowser => self.file_browser.entries.len(),

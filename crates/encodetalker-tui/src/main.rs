@@ -13,7 +13,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 use encodetalker_common::AppPaths;
 use encodetalker_daemon::DaemonConfig;
 use encodetalker_tui::{
-    ensure_daemon_running, handle_key_event, render_ui, AppState, InputAction, IpcClient,
+    ensure_daemon_running, handle_key_event, handle_mouse_event, render_ui, AppState, InputAction,
+    IpcClient,
 };
 
 #[tokio::main]
@@ -119,7 +120,7 @@ async fn main() -> Result<()> {
 
     loop {
         // Rendre l'interface
-        terminal.draw(|f| render_ui(f, &app_state))?;
+        terminal.draw(|f| render_ui(f, &mut app_state))?;
 
         // Gérer les événements
         let timeout = tick_rate
@@ -127,156 +128,157 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|| Duration::from_secs(0));
 
         if event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                // Gérer l'événement clavier
-                let action = handle_key_event(&mut app_state, key);
+            let action = match event::read()? {
+                Event::Key(key) => handle_key_event(&mut app_state, key),
+                Event::Mouse(mouse) => handle_mouse_event(&mut app_state, mouse),
+                _ => InputAction::None,
+            };
 
-                // Traiter l'action
-                match action {
-                    InputAction::None => {}
-                    InputAction::RefreshLists => {
-                        if let Ok((queue, active, history)) = client.refresh_all().await {
-                            app_state.queue_jobs = queue;
-                            app_state.active_jobs = active;
-                            app_state.history_jobs = history;
-                        }
+            // Traiter l'action
+            match action {
+                InputAction::None => {}
+                InputAction::RefreshLists => {
+                    if let Ok((queue, active, history)) = client.refresh_all().await {
+                        app_state.queue_jobs = queue;
+                        app_state.active_jobs = active;
+                        app_state.history_jobs = history;
                     }
-                    InputAction::AddJob {
-                        input_path,
-                        output_path,
-                        config,
-                    } => {
-                        match client
-                            .add_job(input_path.clone(), output_path, config)
-                            .await
-                        {
-                            Ok(job_id) => {
-                                app_state.set_status(format!("Job {job_id} ajouté"));
-                                // Rafraîchir les listes
-                                if let Ok((queue, active, history)) = client.refresh_all().await {
-                                    app_state.queue_jobs = queue;
-                                    app_state.active_jobs = active;
-                                    app_state.history_jobs = history;
-                                }
+                }
+                InputAction::AddJob {
+                    input_path,
+                    output_path,
+                    config,
+                } => {
+                    match client
+                        .add_job(input_path.clone(), output_path, config)
+                        .await
+                    {
+                        Ok(job_id) => {
+                            app_state.set_status(format!("Job {job_id} ajouté"));
+                            // Rafraîchir les listes
+                            if let Ok((queue, active, history)) = client.refresh_all().await {
+                                app_state.queue_jobs = queue;
+                                app_state.active_jobs = active;
+                                app_state.history_jobs = history;
                             }
-                            Err(e) => {
-                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de l'ajout du job: {e}"),
-                                });
-                            }
-                        }
-                    }
-                    InputAction::AddBatchJobs { jobs, config } => {
-                        let total = jobs.len();
-                        let mut success_count = 0;
-                        let mut errors = Vec::new();
-
-                        for (input_path, output_path) in jobs {
-                            match client
-                                .add_job(input_path.clone(), output_path, config.clone())
-                                .await
-                            {
-                                Ok(_job_id) => {
-                                    success_count += 1;
-                                }
-                                Err(e) => {
-                                    let filename = input_path
-                                        .file_name()
-                                        .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string();
-                                    errors.push(format!("{filename}: {e}"));
-                                }
-                            }
-                        }
-
-                        if success_count == total {
-                            app_state.set_status(format!("{total} jobs ajoutés avec succès"));
-                        } else {
-                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                message: format!(
-                                    "{}/{} jobs ajoutés. Échecs:\n{}",
-                                    success_count,
-                                    total,
-                                    errors.join("\n")
-                                ),
-                            });
-                        }
-
-                        // Rafraîchir les listes
-                        if let Ok((queue, active, history)) = client.refresh_all().await {
-                            app_state.queue_jobs = queue;
-                            app_state.active_jobs = active;
-                            app_state.history_jobs = history;
-                        }
-                    }
-                    InputAction::CancelJob { job_id } => {
-                        match client.cancel_job(job_id).await {
-                            Ok(()) => {
-                                app_state.set_status(format!("Job {job_id} annulé"));
-                                // Rafraîchir les listes
-                                if let Ok((queue, active, history)) = client.refresh_all().await {
-                                    app_state.queue_jobs = queue;
-                                    app_state.active_jobs = active;
-                                    app_state.history_jobs = history;
-                                }
-                            }
-                            Err(e) => {
-                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de l'annulation: {e}"),
-                                });
-                            }
-                        }
-                    }
-                    InputAction::RetryJob { job_id } => {
-                        match client.retry_job(job_id).await {
-                            Ok(()) => {
-                                app_state.set_status(format!("Job {job_id} relancé"));
-                                // Rafraîchir les listes
-                                if let Ok((queue, active, history)) = client.refresh_all().await {
-                                    app_state.queue_jobs = queue;
-                                    app_state.active_jobs = active;
-                                    app_state.history_jobs = history;
-                                }
-                            }
-                            Err(e) => {
-                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec du retry: {e}"),
-                                });
-                            }
-                        }
-                    }
-                    InputAction::RemoveFromHistory { job_id } => {
-                        match client.remove_from_history(job_id).await {
-                            Ok(()) => {
-                                app_state.set_status("Tâche supprimée de l'historique");
-                                app_state.history_jobs.retain(|j| j.id != job_id);
-                                // Ajuster l'index si nécessaire
-                                if app_state.selected_index >= app_state.history_jobs.len()
-                                    && app_state.selected_index > 0
-                                {
-                                    app_state.selected_index -= 1;
-                                }
-                            }
-                            Err(e) => {
-                                app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                    message: format!("Échec de la suppression: {e}"),
-                                });
-                            }
-                        }
-                    }
-                    InputAction::ClearHistory => match client.clear_history().await {
-                        Ok(()) => {
-                            app_state.set_status("Historique effacé");
-                            app_state.history_jobs.clear();
                         }
                         Err(e) => {
                             app_state.dialog = Some(encodetalker_tui::Dialog::Error {
-                                message: format!("Échec du clear: {e}"),
+                                message: format!("Échec de l'ajout du job: {e}"),
                             });
                         }
-                    },
+                    }
                 }
+                InputAction::AddBatchJobs { jobs, config } => {
+                    let total = jobs.len();
+                    let mut success_count = 0;
+                    let mut errors = Vec::new();
+
+                    for (input_path, output_path) in jobs {
+                        match client
+                            .add_job(input_path.clone(), output_path, config.clone())
+                            .await
+                        {
+                            Ok(_job_id) => {
+                                success_count += 1;
+                            }
+                            Err(e) => {
+                                let filename = input_path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string();
+                                errors.push(format!("{filename}: {e}"));
+                            }
+                        }
+                    }
+
+                    if success_count == total {
+                        app_state.set_status(format!("{total} jobs ajoutés avec succès"));
+                    } else {
+                        app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                            message: format!(
+                                "{}/{} jobs ajoutés. Échecs:\n{}",
+                                success_count,
+                                total,
+                                errors.join("\n")
+                            ),
+                        });
+                    }
+
+                    // Rafraîchir les listes
+                    if let Ok((queue, active, history)) = client.refresh_all().await {
+                        app_state.queue_jobs = queue;
+                        app_state.active_jobs = active;
+                        app_state.history_jobs = history;
+                    }
+                }
+                InputAction::CancelJob { job_id } => {
+                    match client.cancel_job(job_id).await {
+                        Ok(()) => {
+                            app_state.set_status(format!("Job {job_id} annulé"));
+                            // Rafraîchir les listes
+                            if let Ok((queue, active, history)) = client.refresh_all().await {
+                                app_state.queue_jobs = queue;
+                                app_state.active_jobs = active;
+                                app_state.history_jobs = history;
+                            }
+                        }
+                        Err(e) => {
+                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                message: format!("Échec de l'annulation: {e}"),
+                            });
+                        }
+                    }
+                }
+                InputAction::RetryJob { job_id } => {
+                    match client.retry_job(job_id).await {
+                        Ok(()) => {
+                            app_state.set_status(format!("Job {job_id} relancé"));
+                            // Rafraîchir les listes
+                            if let Ok((queue, active, history)) = client.refresh_all().await {
+                                app_state.queue_jobs = queue;
+                                app_state.active_jobs = active;
+                                app_state.history_jobs = history;
+                            }
+                        }
+                        Err(e) => {
+                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                message: format!("Échec du retry: {e}"),
+                            });
+                        }
+                    }
+                }
+                InputAction::RemoveFromHistory { job_id } => {
+                    match client.remove_from_history(job_id).await {
+                        Ok(()) => {
+                            app_state.set_status("Tâche supprimée de l'historique");
+                            app_state.history_jobs.retain(|j| j.id != job_id);
+                            // Ajuster l'index si nécessaire
+                            if app_state.selected_index >= app_state.history_jobs.len()
+                                && app_state.selected_index > 0
+                            {
+                                app_state.selected_index -= 1;
+                            }
+                        }
+                        Err(e) => {
+                            app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                                message: format!("Échec de la suppression: {e}"),
+                            });
+                        }
+                    }
+                }
+                InputAction::ClearHistory => match client.clear_history().await {
+                    Ok(()) => {
+                        app_state.set_status("Historique effacé");
+                        app_state.history_jobs.clear();
+                    }
+                    Err(e) => {
+                        app_state.dialog = Some(encodetalker_tui::Dialog::Error {
+                            message: format!("Échec du clear: {e}"),
+                        });
+                    }
+                },
             }
         }
 

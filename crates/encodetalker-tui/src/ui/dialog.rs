@@ -1,18 +1,36 @@
-use crate::app::{AppState, Dialog};
+use crate::app::Dialog;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
 /// Rendre un dialogue par-dessus l'interface
-pub fn render_dialog(frame: &mut Frame, area: Rect, state: &AppState) {
+pub fn render_dialog(frame: &mut Frame, area: Rect, state: &mut crate::app::AppState) {
     if let Some(dialog) = &state.dialog {
         match dialog {
-            Dialog::EncodeConfig(config) => render_encode_config_dialog(frame, area, config),
-            Dialog::Confirm { message, .. } => render_confirm_dialog(frame, area, message),
-            Dialog::Error { message } => render_error_dialog(frame, area, message),
-            Dialog::VmafGraph(data) => crate::ui::vmaf_graph::render_vmaf_graph(frame, area, data),
+            Dialog::EncodeConfig(config) => {
+                let dialog_area = centered_rect(80, 80, area);
+                state.layout.dialog_area = Some(dialog_area);
+                render_encode_config_dialog(frame, area, config);
+            }
+            Dialog::Confirm { message, .. } => {
+                let dialog_area = centered_rect(50, 30, area);
+                state.layout.dialog_area = Some(dialog_area);
+                render_confirm_dialog(frame, area, message);
+            }
+            Dialog::Error { message } => {
+                let dialog_area = centered_rect(60, 30, area);
+                state.layout.dialog_area = Some(dialog_area);
+                render_error_dialog(frame, area, message);
+            }
+            Dialog::VmafGraph(data) => {
+                let dialog_area = centered_rect(90, 90, area);
+                state.layout.dialog_area = Some(dialog_area);
+                crate::ui::vmaf_graph::render_vmaf_graph(frame, area, data);
+            }
         }
+    } else {
+        state.layout.dialog_area = None;
     }
 }
 
@@ -337,7 +355,7 @@ fn render_error_dialog(frame: &mut Frame, area: Rect, message: &str) {
 }
 
 /// Créer un rectangle centré
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+pub(crate) fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

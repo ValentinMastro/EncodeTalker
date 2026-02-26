@@ -5,7 +5,7 @@ use ratatui::{
 };
 
 /// Rendre l'interface complète
-pub fn render_ui(frame: &mut Frame, state: &AppState) {
+pub fn render_ui(frame: &mut Frame, state: &mut AppState) {
     let area = frame.size();
 
     // Layout principal : header + contenu + footer
@@ -18,8 +18,13 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
         ])
         .split(area);
 
+    // Stocker layout pour hit-testing souris
+    state.layout.header = chunks[0];
+    state.layout.content = chunks[1];
+    state.layout.content_inner = chunks[1].inner(&layout::Margin::new(1, 1));
+
     // Rendre le header
-    render_header(frame, chunks[0], state);
+    render_header(frame, chunks[0], &*state);
 
     // Rendre le contenu selon la vue active
     match state.current_view {
@@ -29,14 +34,14 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
             }
             return; // Ne pas afficher header/footer pour Loading
         }
-        View::FileBrowser => crate::ui::render_file_browser(frame, chunks[1], state),
-        View::Queue => crate::ui::render_queue_view(frame, chunks[1], state),
-        View::Active => crate::ui::render_active_view(frame, chunks[1], state),
-        View::History => crate::ui::render_history_view(frame, chunks[1], state),
+        View::FileBrowser => crate::ui::render_file_browser(frame, chunks[1], &*state),
+        View::Queue => crate::ui::render_queue_view(frame, chunks[1], &*state),
+        View::Active => crate::ui::render_active_view(frame, chunks[1], &*state),
+        View::History => crate::ui::render_history_view(frame, chunks[1], &*state),
     }
 
     // Rendre le footer
-    render_footer(frame, chunks[2], state);
+    render_footer(frame, chunks[2], &*state);
 
     // Rendre le dialogue par-dessus si présent
     if state.dialog.is_some() {

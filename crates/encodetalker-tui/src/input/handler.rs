@@ -1,5 +1,5 @@
 use crate::app::{AppState, ConfirmAction, Dialog, EncodeConfigDialog, View, VmafGraphData};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use encodetalker_common::{AudioMode, EncoderType, VideoContentType};
 
 /// Obtenir le nombre max de threads disponibles sur la machine
@@ -64,6 +64,115 @@ pub fn handle_key_event(state: &mut AppState, key: KeyEvent) -> InputAction {
         View::Active => handle_active_key(state, key),
         View::History => handle_history_key(state, key),
     }
+}
+
+/// Gérer un événement souris
+pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputAction {
+    // Ignorer complètement la souris en mode Loading
+    if state.current_view == View::Loading {
+        return InputAction::None;
+    }
+
+    let MouseEvent {
+        kind, column, row, ..
+    } = mouse;
+
+    // Priorité au dialogue si ouvert
+    if let Some(dialog_area) = state.layout.dialog_area {
+        // Scroll dans le dialogue (EncodeConfig uniquement)
+        if matches!(state.dialog, Some(Dialog::EncodeConfig(_))) {
+            match kind {
+                MouseEventKind::ScrollUp => {
+                    if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
+                        if config.selected_field > 0 {
+                            config.selected_field -= 1;
+                        }
+                    }
+                    return InputAction::None;
+                }
+                MouseEventKind::ScrollDown => {
+                    if let Some(Dialog::EncodeConfig(ref mut config)) = state.dialog {
+                        if config.selected_field < 7 {
+                            config.selected_field += 1;
+                        }
+                    }
+                    return InputAction::None;
+                }
+                _ => {}
+            }
+        }
+
+        // Clic dans la zone du dialogue
+        if column >= dialog_area.x
+            && column < dialog_area.x + dialog_area.width
+            && row >= dialog_area.y
+            && row < dialog_area.y + dialog_area.height
+        {
+            // Clic dans le dialogue — ne rien faire (géré par clavier)
+            return InputAction::None;
+        }
+
+        // Clic en dehors du dialogue → fermer
+        if matches!(kind, MouseEventKind::Down(MouseButton::Left)) {
+            state.dialog = None;
+            return InputAction::None;
+        }
+
+        return InputAction::None;
+    }
+
+    // Scroll dans la zone de contenu
+    if column >= state.layout.content.x
+        && column < state.layout.content.x + state.layout.content.width
+        && row >= state.layout.content.y
+        && row < state.layout.content.y + state.layout.content.height
+    {
+        match kind {
+            MouseEventKind::ScrollUp => {
+                state.move_up();
+                return InputAction::None;
+            }
+            MouseEventKind::ScrollDown => {
+                state.move_down();
+                return InputAction::None;
+            }
+            _ => {}
+        }
+    }
+
+    // Clic gauche sur un item de la zone de contenu
+    if matches!(kind, MouseEventKind::Down(MouseButton::Left)) {
+        let content_inner = state.layout.content_inner;
+
+        if column >= content_inner.x
+            && column < content_inner.x + content_inner.width
+            && row >= content_inner.y
+            && row < content_inner.y + content_inner.height
+        {
+            // Calculer l'index cliqué (approximation du scroll)
+            #[allow(clippy::cast_possible_truncation)]
+            let visible_height = content_inner.height.saturating_sub(1) as usize;
+            let scroll_offset = state.selected_index.saturating_sub(visible_height);
+            #[allow(clippy::cast_possible_truncation)]
+            let relative_row = row.saturating_sub(content_inner.y) as usize;
+            let clicked_index = scroll_offset + relative_row;
+
+            // Vérifier que l'index est valide
+            let list_len = state.get_current_list_len();
+            if clicked_index < list_len {
+                state.selected_index = clicked_index;
+
+                // FileBrowser : toggle selection si vidéo
+                if state.current_view == View::FileBrowser {
+                    state.file_browser.toggle_selection(clicked_index);
+                }
+            }
+
+            return InputAction::None;
+        }
+    }
+
+    InputAction::None
 }
 
 /// Actions possibles suite à un input
