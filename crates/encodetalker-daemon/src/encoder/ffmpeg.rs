@@ -73,6 +73,50 @@ struct FFProbeTags {
     title: Option<String>,
 }
 
+/// Déterminer le nombre total de frames (3 stratégies)
+async fn determine_total_frames(
+    ffmpeg_bin: &Path,
+    input: &Path,
+    metadata_frames: Option<u64>,
+    duration: Option<Duration>,
+    fps: f64,
+    precise_count: bool,
+) -> Option<u64> {
+    match metadata_frames {
+        Some(frames) => {
+            tracing::info!("Total frames: {frames} (source: metadata nb_frames)");
+            Some(frames)
+        }
+        None => {
+            if precise_count {
+                // Niveau 2: Comptage précis via ffmpeg (lent mais exact)
+                match count_frames_precisely(ffmpeg_bin, input).await {
+                    Ok(frames) => {
+                        tracing::info!("Total frames: {frames} (source: comptage précis ffmpeg)");
+                        Some(frames)
+                    }
+                    Err(e) => {
+                        tracing::error!("Échec du comptage précis: {e}, fallback sur estimation");
+                        estimate_frames_from_duration(duration, fps)
+                    }
+                }
+            } else {
+                estimate_frames_from_duration(duration, fps)
+            }
+        }
+    }
+}
+
+/// Estimer le nombre de frames depuis la durée
+fn estimate_frames_from_duration(duration: Option<Duration>, fps: f64) -> Option<u64> {
+    duration.map(|d| {
+        let duration_secs = d.as_secs_f64();
+        let estimated = estimate_frame_count(duration_secs, fps);
+        tracing::info!("Estimation: {estimated} frames (durée={duration_secs:.2}s × fps={fps:.2})");
+        estimated
+    })
+}
+
 /// Compter précisément les frames via ffmpeg -c copy -f null
 /// ATTENTION: LENT (lit tout le fichier vidéo)
 async fn count_frames_precisely(ffmpeg_bin: &Path, input: &Path) -> Result<u64> {
@@ -141,7 +185,6 @@ async fn count_frames_precisely(ffmpeg_bin: &Path, input: &Path) -> Result<u64> 
 /// # Panics
 ///
 /// Peut paniquer si le chemin d'entrée contient des caractères invalides (conversion `to_str().unwrap()`).
-#[allow(clippy::too_many_lines)] // Probe complet : ffprobe, parsing JSON, comptage frames optionnel
 pub async fn probe_video(
     ffprobe_bin: &Path,
     ffmpeg_bin: &Path,
@@ -217,58 +260,15 @@ pub async fn probe_video(
         .and_then(|f| f.parse::<u64>().ok());
 
     // Stratégie de comptage des frames (3 niveaux)
-    let total_frames = match total_frames_from_metadata {
-        Some(frames) => {
-            tracing::info!("Total frames: {} (source: metadata nb_frames)", frames);
-            Some(frames)
-        }
-        None => {
-            if precise_count {
-                // Niveau 2: Comptage précis via ffmpeg (lent mais exact)
-                match count_frames_precisely(ffmpeg_bin, input).await {
-                    Ok(frames) => {
-                        tracing::info!("Total frames: {} (source: comptage précis ffmpeg)", frames);
-                        Some(frames)
-                    }
-                    Err(e) => {
-                        tracing::error!("Échec du comptage précis: {e}, fallback sur estimation");
-                        // Fallback sur estimation si le comptage échoue
-                        if let Some(duration) = duration {
-                            let duration_secs = duration.as_secs_f64();
-                            let estimated = estimate_frame_count(duration_secs, fps);
-                            tracing::info!(
-                                "Estimation fallback: {} frames (durée={:.2}s × fps={:.2})",
-                                estimated,
-                                duration_secs,
-                                fps
-                            );
-                            Some(estimated)
-                        } else {
-                            None
-                        }
-                    }
-                }
-            } else {
-                // Niveau 3: Estimation rapide (durée × fps)
-                if let Some(duration) = duration {
-                    let duration_secs = duration.as_secs_f64();
-                    let estimated = estimate_frame_count(duration_secs, fps);
-                    tracing::info!(
-                        "nb_frames absent, estimation: {} frames (durée={:.2}s × fps={:.2})",
-                        estimated,
-                        duration_secs,
-                        fps
-                    );
-                    Some(estimated)
-                } else {
-                    tracing::warn!(
-                        "Impossible d'estimer total_frames: durée et nb_frames manquants"
-                    );
-                    None
-                }
-            }
-        }
-    };
+    let total_frames = determine_total_frames(
+        ffmpeg_bin,
+        input,
+        total_frames_from_metadata,
+        duration,
+        fps,
+        precise_count,
+    )
+    .await;
 
     // Extraire streams audio
     let audio_streams = probe
