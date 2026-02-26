@@ -296,6 +296,27 @@ impl IpcClient {
         }
     }
 
+    /// Prober une vidéo pour récupérer ses métadonnées (durée, taille)
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si la requête échoue ou si le daemon retourne une erreur.
+    pub async fn probe_video(&self, path: std::path::PathBuf) -> Result<(Option<f64>, u64)> {
+        let response = self
+            .send_request(RequestPayload::ProbeVideo { path })
+            .await?;
+
+        match response.payload {
+            ResponsePayload::VideoInfo {
+                duration_secs,
+                size_bytes,
+                ..
+            } => Ok((duration_secs, size_bytes)),
+            ResponsePayload::Error { message } => anyhow::bail!("Erreur: {message}"),
+            _ => anyhow::bail!("Réponse inattendue"),
+        }
+    }
+
     /// Recevoir un événement (non-blocking)
     pub async fn poll_event(&self) -> Option<Event> {
         self.event_rx.lock().await.try_recv().ok()

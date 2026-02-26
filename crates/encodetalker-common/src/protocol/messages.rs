@@ -83,6 +83,8 @@ pub enum RequestPayload {
     Ping,
     /// Obtenir l'état de compilation des dépendances
     GetDepsStatus,
+    /// Probe une vidéo pour récupérer ses métadonnées (durée, etc.)
+    ProbeVideo { path: PathBuf },
 }
 
 /// Réponse du daemon vers le client
@@ -133,6 +135,12 @@ pub enum ResponsePayload {
     Pong,
     /// État de compilation des dépendances
     DepsStatus { status: DepsStatusInfo },
+    /// Informations sur une vidéo (durée, taille)
+    VideoInfo {
+        path: PathBuf,
+        duration_secs: Option<f64>,
+        size_bytes: u64,
+    },
 }
 
 /// Événement push du daemon vers les clients (broadcast)

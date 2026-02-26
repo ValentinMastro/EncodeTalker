@@ -1,4 +1,5 @@
 use crate::deps_tracker::DepsCompilationTracker;
+use crate::encoder::ffmpeg::probe_video;
 use crate::queue::{QueueEvent, QueueManager};
 use anyhow::Result;
 use encodetalker_common::ipc::{IpcListener, IpcStream};
@@ -19,6 +20,8 @@ pub struct IpcServer {
     socket_path: std::path::PathBuf,
     queue_manager: Arc<QueueManager>,
     deps_tracker: Arc<DepsCompilationTracker>,
+    ffprobe_bin: std::path::PathBuf,
+    ffmpeg_bin: std::path::PathBuf,
 }
 
 impl IpcServer {
@@ -26,11 +29,15 @@ impl IpcServer {
         socket_path: impl AsRef<Path>,
         queue_manager: Arc<QueueManager>,
         deps_tracker: Arc<DepsCompilationTracker>,
+        ffprobe_bin: impl AsRef<Path>,
+        ffmpeg_bin: impl AsRef<Path>,
     ) -> Self {
         Self {
             socket_path: socket_path.as_ref().to_path_buf(),
             queue_manager,
             deps_tracker,
+            ffprobe_bin: ffprobe_bin.as_ref().to_path_buf(),
+            ffmpeg_bin: ffmpeg_bin.as_ref().to_path_buf(),
         }
     }
 
@@ -134,10 +141,18 @@ impl IpcServer {
                     let queue_manager = self.queue_manager.clone();
                     let deps_tracker = self.deps_tracker.clone();
                     let broadcast_rx = broadcast_tx.subscribe();
+                    let ffprobe_bin = self.ffprobe_bin.clone();
+                    let ffmpeg_bin = self.ffmpeg_bin.clone();
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            Self::handle_client(stream, queue_manager, deps_tracker, broadcast_rx)
-                                .await
+                        if let Err(e) = Self::handle_client(
+                            stream,
+                            queue_manager,
+                            deps_tracker,
+                            ffprobe_bin,
+                            ffmpeg_bin,
+                            broadcast_rx,
+                        )
+                        .await
                         {
                             error!("Erreur client: {}", e);
                         }
@@ -155,6 +170,8 @@ impl IpcServer {
         stream: IpcStream,
         queue_manager: Arc<QueueManager>,
         deps_tracker: Arc<DepsCompilationTracker>,
+        ffprobe_bin: std::path::PathBuf,
+        ffmpeg_bin: std::path::PathBuf,
         mut broadcast_rx: tokio::sync::broadcast::Receiver<Event>,
     ) -> Result<()> {
         info!("Nouveau client connecté");
@@ -174,7 +191,14 @@ impl IpcServer {
                 msg = reader.next() => {
                     match msg {
                         Some(Ok(IpcMessage::Request(request))) => {
-                            let response = Self::handle_request(&queue_manager, &deps_tracker, request).await;
+                            let response = Self::handle_request(
+                                &queue_manager,
+                                &deps_tracker,
+                                &ffprobe_bin,
+                                &ffmpeg_bin,
+                                request,
+                            )
+                            .await;
                             writer.send(IpcMessage::Response(response)).await?;
                         }
                         Some(Ok(_)) => {
@@ -216,6 +240,8 @@ impl IpcServer {
     async fn handle_request(
         queue_manager: &Arc<QueueManager>,
         deps_tracker: &Arc<DepsCompilationTracker>,
+        ffprobe_bin: &Path,
+        ffmpeg_bin: &Path,
         request: Request,
     ) -> Response {
         let request_id = request.id;
@@ -294,6 +320,26 @@ impl IpcServer {
             RequestPayload::GetDepsStatus => {
                 let status = deps_tracker.get_status();
                 Response::new(request_id, ResponsePayload::DepsStatus { status })
+            }
+
+            RequestPayload::ProbeVideo { path } => {
+                // Prober la vidéo pour récupérer durée et taille
+                match probe_video(ffprobe_bin, ffmpeg_bin, &path, false).await {
+                    Ok(video_info) => {
+                        let duration_secs = video_info.duration.map(|d| d.as_secs_f64());
+                        let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+
+                        Response::new(
+                            request_id,
+                            ResponsePayload::VideoInfo {
+                                path,
+                                duration_secs,
+                                size_bytes,
+                            },
+                        )
+                    }
+                    Err(e) => Response::error(request_id, format!("Erreur probe vidéo: {}", e)),
+                }
             }
         }
     }

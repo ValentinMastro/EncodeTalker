@@ -293,6 +293,8 @@ pub struct FileBrowserState {
     pub entries: Vec<DirEntry>,
     /// Fichiers vidéo sélectionnés (chemins absolus)
     pub selected_files: HashSet<PathBuf>,
+    /// Fichiers vidéo dont on attend les métadonnées du daemon
+    pub pending_probes: HashSet<PathBuf>,
 }
 
 impl FileBrowserState {
@@ -302,6 +304,7 @@ impl FileBrowserState {
             current_dir: start_dir,
             entries: Vec::new(),
             selected_files: HashSet::new(),
+            pending_probes: HashSet::new(),
         };
         state.refresh();
         state
@@ -314,6 +317,7 @@ impl FileBrowserState {
     /// Peut paniquer si `self.current_dir.parent()` retourne `Some` mais `unwrap()` échoue (ne devrait jamais arriver).
     pub fn refresh(&mut self) {
         self.entries.clear();
+        self.pending_probes.clear();
 
         // Ajouter l'entrée parent si on n'est pas à la racine
         if self.current_dir.parent().is_some() {
@@ -322,6 +326,8 @@ impl FileBrowserState {
                 name: "..".to_string(),
                 is_dir: true,
                 is_video: false,
+                size_bytes: None,
+                duration_secs: None,
             });
         }
 
@@ -341,11 +347,21 @@ impl FileBrowserState {
 
                     let is_video = !is_dir && is_video_file(&path);
 
+                    // Récupérer la taille du fichier
+                    let size_bytes = std::fs::metadata(&path).ok().map(|m| m.len());
+
+                    // Marquer les vidéos pour probe (durée sera remplie plus tard)
+                    if is_video {
+                        self.pending_probes.insert(path.clone());
+                    }
+
                     Some(DirEntry {
                         path,
                         name,
                         is_dir,
                         is_video,
+                        size_bytes,
+                        duration_secs: None, // Sera rempli via IPC
                     })
                 })
                 .collect();
@@ -416,6 +432,20 @@ impl FileBrowserState {
         files.sort();
         files
     }
+
+    /// Mettre à jour les informations d'une vidéo (appelé quand le daemon répond)
+    pub fn update_video_info(&mut self, path: PathBuf, duration: Option<f64>) {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.path == path) {
+            entry.duration_secs = duration;
+            self.pending_probes.remove(&path);
+        }
+    }
+
+    /// Obtenir la liste des fichiers vidéo en attente de probe
+    #[must_use]
+    pub fn get_pending_probes(&self) -> Vec<PathBuf> {
+        self.pending_probes.iter().cloned().collect()
+    }
 }
 
 /// Entrée de répertoire
@@ -425,6 +455,8 @@ pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
     pub is_video: bool,
+    pub size_bytes: Option<u64>,
+    pub duration_secs: Option<f64>,
 }
 
 /// Vérifier si un fichier est une vidéo
@@ -441,6 +473,18 @@ fn is_video_file(path: &Path) -> bool {
     } else {
         false
     }
+}
+
+/// Formater une durée en secondes au format JJ:HH:MM:SS (toujours complet pour alignement)
+pub fn format_duration(seconds: f64) -> String {
+    let total_secs = seconds as u64;
+    let days = total_secs / 86400;
+    let hours = (total_secs % 86400) / 3600;
+    let minutes = (total_secs % 3600) / 60;
+    let secs = total_secs % 60;
+
+    // Toujours afficher les 4 composantes pour alignement
+    format!("{:02}:{:02}:{:02}:{:02}", days, hours, minutes, secs)
 }
 
 /// Types de dialogues

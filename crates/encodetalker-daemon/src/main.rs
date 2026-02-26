@@ -154,8 +154,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Créer le pipeline d'encodage
     let pipeline = EncodingPipeline::new(
-        ffmpeg_bin,
-        ffprobe_bin,
+        ffmpeg_bin.clone(),
+        ffprobe_bin.clone(),
         svt_av1_bin,
         aomenc_bin,
         config.encoding.precise_frame_count,
@@ -197,6 +197,8 @@ async fn main() -> anyhow::Result<()> {
         &paths.socket_path,
         queue_manager.clone(),
         deps_tracker.clone(),
+        &ffprobe_bin,
+        &ffmpeg_bin,
     );
 
     // Tâche d'auto-save périodique

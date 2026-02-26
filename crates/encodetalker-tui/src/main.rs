@@ -358,6 +358,26 @@ async fn main() -> Result<()> {
                 }
             }
 
+            // Envoyer des requêtes ProbeVideo pour les vidéos en attente (1 par tick)
+            if app_state.current_view == encodetalker_tui::View::FileBrowser {
+                let pending_probes = app_state.file_browser.get_pending_probes();
+                // Prendre seulement la première vidéo en attente pour ne pas bloquer
+                if let Some(path) = pending_probes.first() {
+                    match client.probe_video(path.clone()).await {
+                        Ok((duration, _size)) => {
+                            app_state
+                                .file_browser
+                                .update_video_info(path.clone(), duration);
+                        }
+                        Err(e) => {
+                            // En cas d'erreur, marquer comme "-" en mettant None
+                            app_state.file_browser.update_video_info(path.clone(), None);
+                            tracing::debug!("Erreur probe vidéo {}: {}", path.display(), e);
+                        }
+                    }
+                }
+            }
+
             // Effacer le message de status après 3 secondes
             // (simplifié ici, pourrait utiliser un timestamp)
         }
