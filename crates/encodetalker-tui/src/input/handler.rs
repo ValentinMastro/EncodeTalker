@@ -118,7 +118,12 @@ pub fn handle_mouse_event(state: &mut AppState, mouse: MouseEvent) -> InputActio
                     }
                     MouseEventKind::ScrollDown => {
                         let total_lines = output.lines().count();
-                        let visible_lines = 40; // Approximation
+                        // Calculer hauteur visible réelle (80% hauteur - bordures - titre)
+                        let visible_lines = if let Some(dialog_area) = state.layout.dialog_area {
+                            dialog_area.height.saturating_sub(2) as usize // -2 pour bordures
+                        } else {
+                            40 // Fallback si pas de dialog_area
+                        };
                         let max_scroll = total_lines.saturating_sub(visible_lines);
                         *scroll_offset = (*scroll_offset + 1).min(max_scroll);
                         return InputAction::None;
@@ -556,7 +561,12 @@ fn handle_dialog_key(state: &mut AppState, key: KeyEvent) -> InputAction {
                     }) = &mut state.dialog
                     {
                         let total_lines = output.lines().count();
-                        let visible_lines = 40; // Approximation
+                        // Calculer hauteur visible réelle (80% hauteur - bordures - titre)
+                        let visible_lines = if let Some(dialog_area) = state.layout.dialog_area {
+                            dialog_area.height.saturating_sub(2) as usize // -2 pour bordures
+                        } else {
+                            40 // Fallback si pas de dialog_area
+                        };
                         let max_scroll = total_lines.saturating_sub(visible_lines);
                         *scroll_offset = (*scroll_offset + 1).min(max_scroll);
                     }
